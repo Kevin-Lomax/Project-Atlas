@@ -1,0 +1,42 @@
+# Antes de executar:
+# 1. Crie um arquivo .env copiando o .env.example
+# 2. Edite o arquivo .env com suas credenciais
+
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./db/data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  n8n:
+    image: n8nio/n8n:2.32.1
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - app-network
+
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  n8n_data:
+    driver: local
