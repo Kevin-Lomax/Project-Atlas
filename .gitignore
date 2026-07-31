@@ -3,9 +3,8 @@
 .env.*
 !.env.example
 
-# Dados persistentes de volumes
-db/data/
-n8n_data/
+# Dados persistentes (o Postgres e o n8n usam volumes Docker nomeados,
+# gerenciados pelo próprio Docker — não há diretórios locais a ignorar aqui)
 
 # Logs
 *.log

@@ -9,7 +9,7 @@ O Project Atlas é composto por três serviços orquestrados via Docker Compose,
 ### PostgreSQL
 
 - Imagem: `postgres:15-alpine`.
-- Persistência: volume local `./db/data`.
+- Persistência: volume Docker nomeado `postgres_data`, gerenciado pelo próprio Docker.
 - Configuração via variáveis de ambiente em `.env` (`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`).
 
 ### n8n
@@ -17,13 +17,14 @@ O Project Atlas é composto por três serviços orquestrados via Docker Compose,
 - Imagem: `n8nio/n8n:2.32.1`.
 - Persistência: volume nomeado `n8n_data`.
 - Autenticação básica habilitada via variáveis de ambiente (`N8N_BASIC_AUTH_*`).
-- Não exposto diretamente para fora da rede interna — acesso previsto via Nginx.
+- Não exposto diretamente para fora da rede interna — a única porta publicada ao host é a `80`, do Nginx.
 
 ### Nginx
 
-- Imagem: `nginx:alpine`.
+- Imagem: `nginx:stable-alpine`.
 - Porta `80` exposta ao host.
-- Atua como camada de ingress. Configuração customizada ainda não implementada — hoje o serviço roda com a configuração padrão da imagem.
+- Atua como camada de ingress: reverse proxy para o n8n (`ingress/nginx/default.conf`), incluindo suporte a WebSocket (necessário para a interface do n8n).
+- Sem terminação TLS/HTTPS implementada nesta camada — o serviço atende apenas HTTP na porta 80.
 
 ## Rede
 
@@ -31,8 +32,8 @@ Um único network bridge (`app-network`) conecta os três serviços. Não há se
 
 ## Diretórios reservados
 
-- `ingress/` — reservado para arquivos de configuração do Nginx (ainda não conectado ao serviço via volume).
-- `workflows/` — reservado para definições de workflows do n8n.
+- `ingress/nginx/` — contém a configuração do Nginx, conectada ao serviço via bind mount somente leitura.
+- `workflows/` — reservado para definições de workflows do n8n (ainda não utilizado).
 
 ## Restrições arquiteturais
 

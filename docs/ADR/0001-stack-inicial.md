@@ -31,3 +31,7 @@ Não há registro de alternativas avaliadas para este ADR retroativo. A decisão
 - A infraestrutura permanece mínima e alinhada às restrições do `CLAUDE.md` (sem Prometheus, Grafana, Kubernetes, Traefik, GitHub Actions, AWS, GCP, Redis, RabbitMQ, balanceadores ou serviços extras).
 - Qualquer necessidade futura de observabilidade, escalonamento ou CI/CD exigirá uma nova decisão arquitetural explícita, não coberta por este ADR.
 - O Nginx está declarado mas ainda sem configuração customizada — a configuração efetiva do ingress é uma decisão pendente, fora do escopo deste ADR.
+
+## Atualização (2026-07-31)
+
+A configuração de ingress mencionada acima como pendente foi implementada em `ingress/nginx/default.conf` (reverse proxy para o n8n, com suporte a WebSocket). A persistência do PostgreSQL também passou a usar um volume Docker nomeado (`postgres_data`) em vez do bind mount local `./db/data` citado implicitamente no contexto original. Nenhuma das duas mudanças altera a decisão de stack registrada nesta ADR — ambas permanecem dentro do escopo original (PostgreSQL + n8n + Nginx, rede bridge única, sem componentes adicionais). Esta seção é um addendum; o conteúdo original acima foi preservado sem alterações.

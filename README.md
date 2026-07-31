@@ -28,14 +28,17 @@ Ver detalhes e justificativa em [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) e
 Project-Atlas/
 ├── docker-compose.yml
 ├── .env.example
-├── db/               # volume de dados do PostgreSQL
-├── ingress/          # reservado para configuração do Nginx
-├── workflows/         # reservado para workflows do n8n
+├── ingress/
+│   └── nginx/
+│       └── default.conf   # configuração do Nginx (reverse proxy para o n8n)
+├── workflows/              # reservado para workflows do n8n
 └── docs/
     ├── ARCHITECTURE.md
     ├── ROADMAP.md
-    └── ADR/           # registro de decisões arquiteturais
+    └── ADR/                # registro de decisões arquiteturais
 ```
+
+A persistência do PostgreSQL e do n8n é feita via volumes Docker nomeados (`postgres_data`, `n8n_data`), gerenciados pelo próprio Docker — não há diretórios locais de dados no projeto.
 
 ## Governança
 

@@ -6,7 +6,7 @@
 
 - Definição do `docker-compose.yml` com PostgreSQL, n8n e Nginx.
 - Definição do `.env.example`.
-- Estrutura de diretórios (`db/`, `ingress/`, `workflows/`, `docs/`).
+- Estrutura de diretórios (`ingress/`, `workflows/`, `docs/`).
 
 ## Próximas fases
 
