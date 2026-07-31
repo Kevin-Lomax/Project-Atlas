@@ -1,0 +1,22 @@
+# Variáveis de ambiente (real) — manter apenas o .env.example versionado
+.env
+.env.*
+!.env.example
+
+# Dados persistentes de volumes
+db/data/
+n8n_data/
+
+# Logs
+*.log
+logs/
+
+# Arquivos temporários do sistema
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Arquivos temporários diversos
+*.tmp
+*.swp
+*~
