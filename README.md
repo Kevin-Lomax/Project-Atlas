@@ -27,18 +27,55 @@ Ver detalhes e justificativa em [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) e
    [`docs/ADR/0002-https-e-hardening.md`](docs/ADR/0002-https-e-hardening.md)
    (requer o domínio já apontando para o IP do servidor).
 
+## MofoMusic Pipeline
+
+Quatro workflows do n8n rodam sobre esta infraestrutura:
+
+| Workflow | O que faz |
+|---|---|
+| `01 - Detector de Vídeos` | Varre a pasta Entrada do Drive, registra vídeos novos e move para Fila |
+| `02 - Gerador de Legendas` | Extrai o áudio com ffmpeg e transcreve (Groq Whisper), gerando texto e SRT |
+| `03 - Publicador` | Publica no Instagram (Reels) e Facebook (Page), movendo para Postados ou Erro |
+| `04 - Observabilidade` | Dashboard HTTP, métricas, auto-recuperação e retenção de logs |
+
+Dashboard: `https://<seu-dominio>/webhook/dashboard` (requer o workflow 04 ativo).
+
+Os workflows versionados ficam em [`workflows/`](workflows/) e podem ser reimportados com
+`n8n import:workflow --input=<arquivo>.json`. Detalhes da arquitetura em
+[`docs/ADR/0003-mofomusic-pipeline.md`](docs/ADR/0003-mofomusic-pipeline.md).
+
+### Banco de dados
+
+Migrations idempotentes em [`db/migrations/`](db/migrations/), aplicadas com:
+
+```
+docker exec -i project-atlas-postgres-1 psql -U n8n_user -d n8n -v ON_ERROR_STOP=1 < db/migrations/001_pipeline_schema.sql
+```
+
+Teste automatizado do pipeline (roda em transação e faz rollback, não suja o banco):
+
+```
+docker exec -i project-atlas-postgres-1 psql -U n8n_user -d n8n -v ON_ERROR_STOP=1 < db/tests/test_pipeline.sql
+```
+
 ## Estrutura do projeto
 
 ```
 Project-Atlas/
 ├── docker-compose.yml
 ├── .env.example
+├── docker/
+│   └── n8n/
+│       └── Dockerfile      # imagem do n8n + ffmpeg (extração de áudio)
 ├── ingress/
 │   ├── nginx/
-│   │   └── default.conf   # Nginx: redirect 80→443 + proxy reverso HTTPS para o n8n
+│   │   └── default.conf    # Nginx: redirect 80→443, proxy HTTPS, /media temporário
 │   └── certbot/
 │       └── www/            # webroot usado no desafio HTTP-01 do Let's Encrypt
-├── workflows/              # reservado para workflows do n8n
+├── db/
+│   ├── migrations/         # schema do pipeline (idempotente)
+│   └── tests/              # teste automatizado do pipeline
+├── workflows/              # workflows do n8n versionados em JSON
 └── docs/
     ├── ARCHITECTURE.md
     ├── ROADMAP.md

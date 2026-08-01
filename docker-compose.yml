@@ -20,12 +20,21 @@ services:
       start_period: 10s
 
   n8n:
-    image: n8nio/n8n:2.32.1
+    # Imagem oficial + ffmpeg (ver docker/n8n/Dockerfile).
+    build:
+      context: ./docker/n8n
+      args:
+        N8N_VERSION: 2.32.1
+    image: project-atlas/n8n:2.32.1-ffmpeg
     restart: unless-stopped
     env_file:
       - .env
     volumes:
       - n8n_data:/home/node/.n8n
+      # Área pública temporária: a Meta Graph API exige uma URL publicamente
+      # acessível para buscar o vídeo. O Workflow 03 grava o arquivo aqui,
+      # publica e apaga em seguida. Ver ingress/nginx/default.conf.
+      - media_data:/media
     networks:
       - app-network
     depends_on:
@@ -48,6 +57,7 @@ services:
       - ./ingress/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
       - ./ingress/certbot/www:/var/www/certbot:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
+      - media_data:/var/www/media:ro
     networks:
       - app-network
     depends_on:
@@ -67,3 +77,4 @@ networks:
 volumes:
   postgres_data:
   n8n_data:
+  media_data:

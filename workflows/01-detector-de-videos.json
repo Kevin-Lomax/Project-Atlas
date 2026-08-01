@@ -1,0 +1,343 @@
+[
+  {
+    "id": "wf0001detectorvideos",
+    "name": "01 - Detector de Vídeos",
+    "active": false,
+    "settings": { "executionOrder": "v1" },
+    "nodes": [
+      {
+        "id": "sticky-overview",
+        "name": "Sticky Note - Visao Geral",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [-180, -420],
+        "parameters": {
+          "content": "## 01 - Detector de Vídeos\nMofoMusic Pipeline — Sprint 1\n\nPorta de entrada do pipeline. A cada 1 minuto varre a pasta **Entrada** do Google Drive, registra vídeos novos no PostgreSQL, move o arquivo para **Fila** e dispara o Workflow 02.\n\nNenhum processamento de IA acontece aqui.",
+          "height": 220,
+          "width": 500,
+          "color": 6
+        }
+      },
+      {
+        "id": "sticky-entrada",
+        "name": "Sticky Note - 1 Entrada",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [-180, -160],
+        "parameters": {
+          "content": "### 1. ENTRADA\nGatilho Cron (1 min) + IDs das pastas do Drive.\n\nOs IDs ficam no node **Config - Pastas do Drive**: é o único lugar a editar se as pastas mudarem.",
+          "height": 220,
+          "width": 380,
+          "color": 4
+        }
+      },
+      {
+        "id": "sticky-processamento",
+        "name": "Sticky Note - 2 Processamento",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [240, -160],
+        "parameters": {
+          "content": "### 2. PROCESSAMENTO\nBusca só arquivos da pasta Entrada (a query já exclui pastas e lixeira) e filtra pelas extensões aceitas: **mp4, mov, avi, mkv, m4v**.\n\nQualquer outro arquivo é ignorado em silêncio — não é erro.",
+          "height": 220,
+          "width": 420,
+          "color": 4
+        }
+      },
+      {
+        "id": "sticky-banco",
+        "name": "Sticky Note - 3 Banco",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [700, -160],
+        "parameters": {
+          "content": "### 3. BANCO\n`INSERT ... ON CONFLICT (drive_file_id) DO NOTHING`.\n\nÉ aqui que a duplicidade é barrada: se o vídeo já foi registrado, nada é retornado e o item **para neste ponto** — não é movido de novo nem redispara o Workflow 02.\n\nSó vídeos realmente novos seguem adiante.",
+          "height": 240,
+          "width": 440,
+          "color": 5
+        }
+      },
+      {
+        "id": "sticky-movimentacao",
+        "name": "Sticky Note - 4 Movimentacao",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [1180, -160],
+        "parameters": {
+          "content": "### 4. MOVIMENTAÇÃO\nMove o arquivo de **Entrada → Fila** no Drive e atualiza `current_folder = 'FILA'` no banco, mantendo o estado do Drive e do PostgreSQL sempre em sincronia.",
+          "height": 240,
+          "width": 400,
+          "color": 5
+        }
+      },
+      {
+        "id": "sticky-proximo",
+        "name": "Sticky Note - 5 Proximo Workflow",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [1620, -160],
+        "parameters": {
+          "content": "### 5. PRÓXIMO WORKFLOW\nDispara o **02 - Gerador de Legendas** sem esperar o retorno (`waitForSubWorkflow = false`).\n\nIsso é proposital: a transcrição pode levar minutos e o Cron roda a cada 1 minuto — esperar aqui empilharia execuções.",
+          "height": 240,
+          "width": 420,
+          "color": 3
+        }
+      },
+      {
+        "id": "sticky-erros",
+        "name": "Sticky Note - Erros",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [1180, 420],
+        "parameters": {
+          "content": "### TRATAMENTO DE ERROS\nFalha ao mover um arquivo não interrompe os demais: o erro é gravado em `pipeline_logs` e o vídeo fica marcado com `status = ERROR` para reprocessamento posterior.",
+          "height": 200,
+          "width": 440,
+          "color": 2
+        }
+      },
+
+      {
+        "id": "trigger-cron",
+        "name": "Gatilho - A Cada 1 Minuto",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [-140, 100],
+        "parameters": {
+          "rule": { "interval": [{ "field": "minutes", "minutesInterval": 1 }] }
+        }
+      },
+      {
+        "id": "trigger-manual",
+        "name": "Disparo Manual - Sob Demanda",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1,
+        "position": [-140, 280],
+        "notes": "Permite forcar uma varredura imediata sem esperar o Cron (operacao e testes).",
+        "parameters": {}
+      },
+      {
+        "id": "config-pastas",
+        "name": "Config - Pastas do Drive",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [60, 100],
+        "notes": "Unico ponto de configuracao das pastas do Google Drive.",
+        "parameters": {
+          "mode": "manual",
+          "assignments": {
+            "assignments": [
+              {
+                "id": "a1a1a1a1-0000-4000-8000-000000000001",
+                "name": "entradaFolderId",
+                "value": "1w4qfEzSdSjf78GbPB_-NxoxY23A66jss",
+                "type": "string"
+              },
+              {
+                "id": "a1a1a1a1-0000-4000-8000-000000000002",
+                "name": "filaFolderId",
+                "value": "1NRhiTnERAsKT0KS9qgsyRqRBgkFmxpgs",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "drive-search",
+        "name": "Google Drive - Buscar Videos em Entrada",
+        "type": "n8n-nodes-base.googleDrive",
+        "typeVersion": 3,
+        "position": [300, 100],
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
+        "parameters": {
+          "resource": "fileFolder",
+          "operation": "search",
+          "searchMethod": "query",
+          "queryString": "={{ \"'\" + $json.entradaFolderId + \"' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'\" }}",
+          "returnAll": true,
+          "options": { "fields": ["*"] }
+        },
+        "credentials": {
+          "googleDriveOAuth2Api": { "id": "DqPqm110gu3MwxJj", "name": "Google Drive account" }
+        }
+      },
+      {
+        "id": "code-filtro",
+        "name": "Validar Tipo de Arquivo",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [520, 100],
+        "notes": "Allow-list de extensoes de video. Ignora o resto sem gerar erro.",
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "const allowedExtensions = ['mp4', 'mov', 'avi', 'mkv', 'm4v'];\nconst folderMimeType = 'application/vnd.google-apps.folder';\n\nconst validItems = [];\n\nfor (const item of $input.all()) {\n  const data = item.json;\n\n  // Redundante com a query do Drive, mas barato e evita qualquer surpresa.\n  if (data.mimeType === folderMimeType) continue;\n\n  const name = data.name || '';\n  const extension = name.includes('.') ? name.split('.').pop().toLowerCase() : '';\n  if (!allowedExtensions.includes(extension)) continue;\n\n  validItems.push({\n    json: {\n      driveFileId: data.id,\n      filename: name,\n      mimeType: data.mimeType || null,\n      tamanho: data.size ? Number(data.size) : null,\n      link: data.webViewLink || null,\n      dataCriacao: data.createdTime || null,\n    },\n    pairedItem: item.pairedItem,\n  });\n}\n\nreturn validItems;"
+        }
+      },
+      {
+        "id": "postgres-insert",
+        "name": "Postgres - Registrar Video",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [780, 100],
+        "notes": "ON CONFLICT DO NOTHING: video ja conhecido nao retorna linha e o fluxo para aqui.",
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO videos (drive_file_id, filename, mime_type, size_bytes, drive_link, drive_created_at, current_folder, status)\nVALUES ($1, $2, $3, $4, $5, $6, 'ENTRADA', 'PENDING')\nON CONFLICT (drive_file_id) DO NOTHING\nRETURNING id, drive_file_id, filename;",
+          "options": {
+            "queryReplacement": "={{ [ $json.driveFileId, $json.filename, $json.mimeType, $json.tamanho, $json.link, $json.dataCriacao ] }}"
+          }
+        },
+        "credentials": {
+          "postgres": { "id": "b7e1f2a0-0001-4a11-9a11-000000000001", "name": "Postgres - Project Atlas" }
+        }
+      },
+      {
+        "id": "drive-move",
+        "name": "Google Drive - Mover para Fila",
+        "type": "n8n-nodes-base.googleDrive",
+        "typeVersion": 3,
+        "position": [1240, 100],
+        "onError": "continueErrorOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
+        "parameters": {
+          "resource": "file",
+          "operation": "move",
+          "fileId": { "__rl": true, "mode": "id", "value": "={{ $json.drive_file_id }}" },
+          "driveId": { "__rl": true, "mode": "list", "value": "My Drive", "cachedResultName": "My Drive" },
+          "folderId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "={{ $('Config - Pastas do Drive').first().json.filaFolderId }}"
+          }
+        },
+        "credentials": {
+          "googleDriveOAuth2Api": { "id": "DqPqm110gu3MwxJj", "name": "Google Drive account" }
+        }
+      },
+      {
+        "id": "marcar-fila",
+        "name": "Postgres - Marcar Como Fila",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [1460, 100],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE videos SET current_folder = 'FILA' WHERE drive_file_id = $1 RETURNING id, drive_file_id, filename;",
+          "options": {
+            "queryReplacement": "={{ [ $('Postgres - Registrar Video').item.json.drive_file_id ] }}"
+          }
+        },
+        "credentials": {
+          "postgres": { "id": "b7e1f2a0-0001-4a11-9a11-000000000001", "name": "Postgres - Project Atlas" }
+        }
+      },
+      {
+        "id": "log-detectado",
+        "name": "Log - Video Detectado",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [1680, 100],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO pipeline_logs (video_id, workflow, level, message, context) VALUES ($1, '01-detector-de-videos', 'INFO', 'Video detectado e movido para Fila', $2::jsonb);",
+          "options": {
+            "queryReplacement": "={{ [ $json.id, JSON.stringify({ arquivo: $json.filename, drive_file_id: $json.drive_file_id }) ] }}"
+          }
+        },
+        "credentials": {
+          "postgres": { "id": "b7e1f2a0-0001-4a11-9a11-000000000001", "name": "Postgres - Project Atlas" }
+        }
+      },
+      {
+        "id": "execute-workflow-02",
+        "name": "Disparar - 02 Gerador de Legendas",
+        "type": "n8n-nodes-base.executeWorkflow",
+        "typeVersion": 1.2,
+        "position": [1900, 100],
+        "onError": "continueRegularOutput",
+        "notes": "Nao espera o retorno: a transcricao pode demorar mais que o intervalo do Cron.",
+        "parameters": {
+          "source": "database",
+          "workflowId": {
+            "__rl": true,
+            "mode": "list",
+            "value": "wf0002geradorlegendas",
+            "cachedResultName": "02 - Gerador de Legendas"
+          },
+          "workflowInputs": { "mappingMode": "defineBelow", "value": {}, "matchingColumns": [], "schema": [] },
+          "options": { "waitForSubWorkflow": false }
+        }
+      },
+
+      {
+        "id": "consolidar-erro",
+        "name": "Consolidar Erro",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [1460, 620],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "language": "javaScript",
+          "jsCode": "const j = $input.item.json;\nconst mensagem = j.error?.message || j.error || j.message || 'Falha ao mover arquivo para a Fila';\n\nreturn {\n  json: {\n    driveFileId: j.drive_file_id ?? null,\n    erro: String(mensagem).slice(0, 2000),\n  },\n};"
+        }
+      },
+      {
+        "id": "registrar-erro",
+        "name": "Postgres - Registrar Erro",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [1680, 620],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "WITH v AS (\n  UPDATE videos SET status = 'ERROR', error_message = $2, retry_count = retry_count + 1\n  WHERE drive_file_id = $1\n  RETURNING id\n)\nINSERT INTO pipeline_logs (video_id, workflow, level, message)\nSELECT v.id, '01-detector-de-videos', 'ERROR', $2 FROM v;",
+          "options": { "queryReplacement": "={{ [ $json.driveFileId, $json.erro ] }}" }
+        },
+        "credentials": {
+          "postgres": { "id": "b7e1f2a0-0001-4a11-9a11-000000000001", "name": "Postgres - Project Atlas" }
+        }
+      }
+    ],
+    "connections": {
+      "Gatilho - A Cada 1 Minuto": {
+        "main": [[{ "node": "Config - Pastas do Drive", "type": "main", "index": 0 }]]
+      },
+      "Disparo Manual - Sob Demanda": {
+        "main": [[{ "node": "Config - Pastas do Drive", "type": "main", "index": 0 }]]
+      },
+      "Config - Pastas do Drive": {
+        "main": [[{ "node": "Google Drive - Buscar Videos em Entrada", "type": "main", "index": 0 }]]
+      },
+      "Google Drive - Buscar Videos em Entrada": {
+        "main": [[{ "node": "Validar Tipo de Arquivo", "type": "main", "index": 0 }]]
+      },
+      "Validar Tipo de Arquivo": {
+        "main": [[{ "node": "Postgres - Registrar Video", "type": "main", "index": 0 }]]
+      },
+      "Postgres - Registrar Video": {
+        "main": [[{ "node": "Google Drive - Mover para Fila", "type": "main", "index": 0 }]]
+      },
+      "Google Drive - Mover para Fila": {
+        "main": [
+          [{ "node": "Postgres - Marcar Como Fila", "type": "main", "index": 0 }],
+          [{ "node": "Consolidar Erro", "type": "main", "index": 0 }]
+        ]
+      },
+      "Postgres - Marcar Como Fila": {
+        "main": [[{ "node": "Log - Video Detectado", "type": "main", "index": 0 }]]
+      },
+      "Log - Video Detectado": {
+        "main": [[{ "node": "Disparar - 02 Gerador de Legendas", "type": "main", "index": 0 }]]
+      },
+      "Consolidar Erro": {
+        "main": [[{ "node": "Postgres - Registrar Erro", "type": "main", "index": 0 }]]
+      }
+    }
+  }
+]

@@ -57,6 +57,60 @@ O Project Atlas é composto por três serviços orquestrados via Docker Compose,
 - Faz dump do PostgreSQL, export dos workflows (`n8n export:workflow`) e cópia do volume `n8n_data`, compactando tudo em um `.tar.gz` por execução.
 - Retenção automática: mantém apenas os 7 backups mais recentes.
 
+## MofoMusic Pipeline (workflows do n8n)
+
+O produto que roda sobre esta infraestrutura. Detalhes e justificativas em [`ADR/0003-mofomusic-pipeline.md`](ADR/0003-mofomusic-pipeline.md).
+
+```
+Google Drive /Entrada
+        │  (Cron 1 min)
+        ▼
+01 - Detector de Vídeos ──── registra em videos (PENDING) ── move → /Fila
+        │
+        ▼
+02 - Gerador de Legendas ─── baixa · ffmpeg extrai áudio · Groq transcreve
+        │                    grava transcrição + SRT (TRANSCRIBED)
+        ▼
+03 - Publicador ──────────── Instagram (Reels) + Facebook (Page)
+        │                    move → /Postados  ou  → /Erro
+        ▼
+04 - Observabilidade ─────── dashboard · métricas · auto-recuperação · retenção
+```
+
+Os workflows **não se chamam em cadeia**: cada um consome o estado que lhe compete em `videos.status`. Isso permite que qualquer etapa falhe ou seja reprocessada isoladamente.
+
+Ciclo de vida de um vídeo:
+
+```
+PENDING → TRANSCRIBING → TRANSCRIBED → PUBLISHING → PUBLISHED
+                                                  ↘ PARTIAL
+   ↘ ERROR (a partir de qualquer etapa)
+```
+
+### Banco de dados do pipeline
+
+| Tabela | Papel |
+|---|---|
+| `videos` | Registro central e estado de cada vídeo |
+| `video_transcriptions` | Transcrição e legenda SRT (1:1 com vídeo) |
+| `social_networks` | Catálogo das redes; `enabled` controla quais são publicadas |
+| `video_publications` | Uma linha por (vídeo, rede), com id do post e erro |
+| `video_status_history` | Auditoria automática de transições (via trigger) |
+| `pipeline_logs` | Log estruturado dos workflows, com retenção de 30 dias |
+| `pipeline_metrics` | Snapshots periódicos para série histórica |
+
+Views de apoio: `vw_health`, `vw_pipeline_status`, `vw_videos_detalhado`, `vw_publicacoes_por_rede`.
+
+Migrations idempotentes em `db/migrations/`; teste automatizado do pipeline em `db/tests/test_pipeline.sql`.
+
+### Área pública temporária de mídia
+
+A Meta Graph API exige uma URL pública de onde baixar o vídeo. O Workflow 03 grava o arquivo no volume `media_data` (servido pelo Nginx em `/media/` sob HTTPS) com nome aleatório, publica e apaga em seguida. `autoindex` está desligado e o Workflow 04 remove órfãos a cada 15 minutos.
+
+### Expansão para outras redes
+
+TikTok, YouTube Shorts, Threads, X, Pinterest e LinkedIn já estão cadastrados em `social_networks` como **desabilitados**. A arquitetura os suporta (o status final é derivado das redes habilitadas); falta apenas a integração de cada um, que é trabalho futuro e não faz parte do escopo atual.
+
 ## Rede
 
 Um único network bridge (`app-network`) conecta os três serviços do Docker Compose. Não há segmentação adicional de rede neste estágio.

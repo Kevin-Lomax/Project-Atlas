@@ -1,0 +1,717 @@
+[
+  {
+    "id": "wf0003publicador",
+    "name": "03 - Publicador",
+    "active": false,
+    "settings": { "executionOrder": "v1" },
+    "nodes": [
+      {
+        "id": "sticky-03-visao",
+        "name": "Sticky Note - Visao Geral",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [-200, -460],
+        "parameters": {
+          "content": "## 03 - Publicador\nMofoMusic Pipeline — Sprint 3\n\nPega vídeos com `status = TRANSCRIBED`, publica no Instagram (Reels) e no Facebook (Page) e move o arquivo no Drive:\n\n**Fila → Postados** (sucesso) ou **Fila → Erro** (falha)\n\nA arquitetura já suporta outras redes: basta habilitá-las em `social_networks` e acrescentar o ramo correspondente.",
+          "height": 260,
+          "width": 520,
+          "color": 6
+        }
+      },
+      {
+        "id": "sticky-03-url",
+        "name": "Sticky Note - URL Publica",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [340, -460],
+        "parameters": {
+          "content": "### POR QUE UMA URL PÚBLICA?\nA Meta Graph API **não aceita upload direto** do arquivo neste fluxo: ela exige uma URL de onde possa baixar o vídeo.\n\nPor isso o vídeo é gravado em `/media` (servido pelo Nginx sob HTTPS) com um **nome aleatório**, publicado, e apagado no fim da execução.\n\nO arquivo fica exposto somente durante a publicação, e o diretório não permite listagem.",
+          "height": 260,
+          "width": 520,
+          "color": 3
+        }
+      },
+      {
+        "id": "sticky-03-ig",
+        "name": "Sticky Note - Instagram",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [900, -460],
+        "parameters": {
+          "content": "### INSTAGRAM (Reels)\nPublicação em 3 etapas, como a API exige:\n\n1. cria o *container* (`/media`)\n2. faz polling do `status_code` até `FINISHED`\n3. publica (`/media_publish`)\n\nO polling é limitado a ~10 tentativas (≈3 min); passando disso vira erro, conforme a recomendação da própria Meta.",
+          "height": 260,
+          "width": 480,
+          "color": 4
+        }
+      },
+      {
+        "id": "sticky-03-fb",
+        "name": "Sticky Note - Facebook",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [1400, -460],
+        "parameters": {
+          "content": "### FACEBOOK (Page)\nPublicação em uma única chamada: `POST /{page-id}/videos` com `file_url`.\n\nCada rede grava sua própria linha em `video_publications`, então uma rede pode falhar sem derrubar a outra.",
+          "height": 260,
+          "width": 440,
+          "color": 4
+        }
+      },
+      {
+        "id": "sticky-03-final",
+        "name": "Sticky Note - Consolidacao",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [1860, -460],
+        "parameters": {
+          "content": "### CONSOLIDAÇÃO\nO status final do vídeo é calculado a partir das publicações:\n\n- todas as redes habilitadas OK → `PUBLISHED` → move para **Postados**\n- algumas OK → `PARTIAL`\n- nenhuma OK → `ERROR` → move para **Erro**\n\nPor fim o arquivo público temporário é apagado.",
+          "height": 260,
+          "width": 460,
+          "color": 5
+        }
+      },
+      {
+        "id": "sticky-03-cred",
+        "name": "Sticky Note - Credenciais",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [-200, 480],
+        "parameters": {
+          "content": "### PENDÊNCIA DE CREDENCIAIS\nToda a integração está implementada. Falta apenas:\n\n1. **Meta Graph API** — informar o `access_token` na credencial de mesmo nome.\n2. **IDs das contas** — preencher `igUserId` e `fbPageId` no node **Config - Publicacao**.\n\nNenhuma outra alteração é necessária para entrar em produção.",
+          "height": 240,
+          "width": 480,
+          "color": 2
+        }
+      },
+
+      {
+        "id": "trigger-cron-03",
+        "name": "Gatilho - A Cada 2 Minutos",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [-160, 60],
+        "parameters": { "rule": { "interval": [{ "field": "minutes", "minutesInterval": 2 }] } }
+      },
+      {
+        "id": "trigger-manual-03",
+        "name": "Disparo Manual - Sob Demanda",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1,
+        "position": [-160, 240],
+        "parameters": {}
+      },
+      {
+        "id": "config-pub",
+        "name": "Config - Publicacao",
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.4,
+        "position": [40, 60],
+        "notes": "Unico ponto de configuracao de contas, pastas e versao da Graph API.",
+        "parameters": {
+          "mode": "manual",
+          "assignments": {
+            "assignments": [
+              { "id": "c-01", "name": "igUserId", "value": "COLOQUE_AQUI_O_INSTAGRAM_USER_ID", "type": "string" },
+              { "id": "c-02", "name": "fbPageId", "value": "COLOQUE_AQUI_O_FACEBOOK_PAGE_ID", "type": "string" },
+              { "id": "c-03", "name": "graphVersion", "value": "v25.0", "type": "string" },
+              { "id": "c-04", "name": "igHost", "value": "https://graph.instagram.com", "type": "string" },
+              { "id": "c-05", "name": "fbHost", "value": "https://graph.facebook.com", "type": "string" },
+              { "id": "c-06", "name": "mediaBaseUrl", "value": "https://seun8n.duckdns.org/media", "type": "string" },
+              { "id": "c-07", "name": "postadosFolderId", "value": "1OJ2QIjHibsLA5oC15130OaU5EG6O2Zso", "type": "string" },
+              { "id": "c-08", "name": "erroFolderId", "value": "1-kl_w8SQkl4NU2nOi-UoTPQuWWyFEwIe", "type": "string" }
+            ]
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "buscar-prontos",
+        "name": "Postgres - Buscar Videos Prontos",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [240, 60],
+        "notes": "Lote pequeno por execucao: evita estourar rate limit da Meta e memoria da VM.",
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT v.id,\n       v.drive_file_id,\n       v.filename,\n       COALESCE(t.transcript_text, '') AS transcript,\n       (SELECT enabled FROM social_networks WHERE code = 'INSTAGRAM') AS ig_enabled,\n       (SELECT enabled FROM social_networks WHERE code = 'FACEBOOK') AS fb_enabled\nFROM videos v\nLEFT JOIN video_transcriptions t ON t.video_id = v.id\nWHERE v.status = 'TRANSCRIBED'\nORDER BY v.created_at\nLIMIT 3;",
+          "options": {}
+        },
+        "credentials": {
+          "postgres": { "id": "b7e1f2a0-0001-4a11-9a11-000000000001", "name": "Postgres - Project Atlas" }
+        }
+      },
+      {
+        "id": "status-publishing",
+        "name": "Status - Publicando",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [440, 60],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE videos SET status = 'PUBLISHING', error_message = NULL WHERE id = $1;",
+          "options": { "queryReplacement": "={{ [ $json.id ] }}" }
+        },
+        "credentials": {
+          "postgres": { "id": "b7e1f2a0-0001-4a11-9a11-000000000001", "name": "Postgres - Project Atlas" }
+        }
+      },
+      {
+        "id": "drive-download-03",
+        "name": "Google Drive - Baixar Video",
+        "type": "n8n-nodes-base.googleDrive",
+        "typeVersion": 3,
+        "position": [640, 60],
+        "onError": "continueErrorOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
+        "parameters": {
+          "resource": "file",
+          "operation": "download",
+          "fileId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "={{ $('Postgres - Buscar Videos Prontos').item.json.drive_file_id }}"
+          },
+          "options": { "binaryPropertyName": "data" }
+        },
+        "credentials": {
+          "googleDriveOAuth2Api": { "id": "DqPqm110gu3MwxJj", "name": "Google Drive account" }
+        }
+      },
+      {
+        "id": "preparar-publico",
+        "name": "Preparar Arquivo Publico",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [840, 60],
+        "notes": "Nome aleatorio: o arquivo fica publico durante a publicacao, entao o nome nao pode ser adivinhavel.",
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "language": "javaScript",
+          "jsCode": "const src = $('Postgres - Buscar Videos Prontos').item.json;\nconst cfg = $('Config - Publicacao').first().json;\n\nconst ext = (src.filename || '').includes('.')\n  ? src.filename.split('.').pop().toLowerCase()\n  : 'mp4';\n\n// Nome aleatorio e nao sequencial. Enquanto o arquivo esta em /media ele e\n// publicamente acessivel, entao o nome precisa ser impossivel de adivinhar.\nconst token = [...Array(4)]\n  .map(() => Math.random().toString(36).slice(2, 10))\n  .join('');\nconst publicName = `${token}.${ext}`;\n\n// Legenda: usa a transcricao gerada no Workflow 02. O limite de caption do\n// Instagram e 2200 caracteres.\nconst caption = String(src.transcript || '').trim().slice(0, 2200);\n\nreturn {\n  json: {\n    videoId: src.id,\n    driveFileId: src.drive_file_id,\n    filename: src.filename,\n    igEnabled: src.ig_enabled === true,\n    fbEnabled: src.fb_enabled === true,\n    publicName,\n    publicPath: `/media/${publicName}`,\n    publicUrl: `${cfg.mediaBaseUrl}/${publicName}`,\n    caption,\n  },\n};"
+        }
+      },
+      {
+        "id": "salvar-media",
+        "name": "Salvar Video em Media Publica",
+        "type": "n8n-nodes-base.readWriteFile",
+        "typeVersion": 1,
+        "position": [1040, 60],
+        "onError": "continueErrorOutput",
+        "parameters": {
+          "operation": "write",
+          "fileName": "={{ $json.publicPath }}",
+          "dataPropertyName": "data",
+          "options": {}
+        }
+      },
+      {
+        "id": "if-ig",
+        "name": "Instagram Habilitado?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [1240, 60],
+        "parameters": {
+          "conditions": {
+            "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose", "version": 2 },
+            "conditions": [
+              {
+                "id": "cond-ig",
+                "leftValue": "={{ $('Preparar Arquivo Publico').item.json.igEnabled }}",
+                "rightValue": "={{ true }}",
+                "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "ig-container",
+        "name": "IG - Criar Container",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [1440, -60],
+        "onError": "continueErrorOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $('Config - Publicacao').first().json.igHost }}/{{ $('Config - Publicacao').first().json.graphVersion }}/{{ $('Config - Publicacao').first().json.igUserId }}/media",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpQueryAuth",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              { "name": "media_type", "value": "REELS" },
+              { "name": "video_url", "value": "={{ $('Preparar Arquivo Publico').item.json.publicUrl }}" },
+              { "name": "caption", "value": "={{ $('Preparar Arquivo Publico').item.json.caption }}" }
+            ]
+          },
+          "options": { "timeout": 60000 }
+        },
+        "credentials": {
+          "httpQueryAuth": { "id": "metagraphapicred001", "name": "Meta Graph API" }
+        }
+      },
+      {
+        "id": "ig-aguardar",
+        "name": "IG - Aguardar Processamento",
+        "type": "n8n-nodes-base.wait",
+        "typeVersion": 1.1,
+        "position": [1640, -60],
+        "webhookId": "aa000000-0000-4000-8000-000000000003",
+        "parameters": { "amount": 20, "unit": "seconds" }
+      },
+      {
+        "id": "ig-status",
+        "name": "IG - Verificar Status",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [1840, -60],
+        "onError": "continueErrorOutput",
+        "parameters": {
+          "method": "GET",
+          "url": "={{ $('Config - Publicacao').first().json.igHost }}/{{ $('Config - Publicacao').first().json.graphVersion }}/{{ $('IG - Criar Container').item.json.id }}",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpQueryAuth",
+          "sendQuery": true,
+          "queryParameters": { "parameters": [{ "name": "fields", "value": "status_code" }] },
+          "options": { "timeout": 30000 }
+        },
+        "credentials": {
+          "httpQueryAuth": { "id": "metagraphapicred001", "name": "Meta Graph API" }
+        }
+      },
+      {
+        "id": "ig-pronto",
+        "name": "IG - Container Pronto?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [2040, -60],
+        "parameters": {
+          "conditions": {
+            "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose", "version": 2 },
+            "conditions": [
+              {
+                "id": "cond-fin",
+                "leftValue": "={{ $json.status_code }}",
+                "rightValue": "FINISHED",
+                "operator": { "type": "string", "operation": "equals" }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "ig-limite",
+        "name": "IG - Limite de Tentativas",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [2040, 160],
+        "notes": "A Meta recomenda no maximo ~5 min de polling. Passando disso, falha explicitamente.",
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "language": "javaScript",
+          "jsCode": "// $runIndex conta quantas vezes este node ja rodou nesta execucao, o que\n// funciona como contador natural do laco de polling.\nconst tentativa = $runIndex + 1;\nconst maxTentativas = 10;\n\nconst statusAtual = $input.item.json.status_code || 'DESCONHECIDO';\n\nif (statusAtual === 'ERROR' || statusAtual === 'EXPIRED') {\n  throw new Error(`Instagram devolveu status ${statusAtual} para o container`);\n}\n\nif (tentativa >= maxTentativas) {\n  throw new Error(\n    `Container do Instagram nao ficou pronto apos ${maxTentativas} verificacoes (ultimo status: ${statusAtual})`\n  );\n}\n\nreturn $input.item;"
+        }
+      },
+      {
+        "id": "ig-publicar",
+        "name": "IG - Publicar",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [2240, -160],
+        "onError": "continueErrorOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $('Config - Publicacao').first().json.igHost }}/{{ $('Config - Publicacao').first().json.graphVersion }}/{{ $('Config - Publicacao').first().json.igUserId }}/media_publish",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpQueryAuth",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              { "name": "creation_id", "value": "={{ $('IG - Criar Container').item.json.id }}" }
+            ]
+          },
+          "options": { "timeout": 60000 }
+        },
+        "credentials": {
+          "httpQueryAuth": { "id": "metagraphapicred001", "name": "Meta Graph API" }
+        }
+      },
+      {
+        "id": "ig-registrar",
+        "name": "IG - Registrar Publicacao",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [2440, -160],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO video_publications (video_id, network_id, status, external_post_id, published_at)\nSELECT $1, n.id, 'PUBLISHED', $2, now() FROM social_networks n WHERE n.code = 'INSTAGRAM'\nON CONFLICT (video_id, network_id) DO UPDATE SET\n  status = 'PUBLISHED', external_post_id = EXCLUDED.external_post_id,\n  published_at = now(), error_message = NULL;",
+          "options": {
+            "queryReplacement": "={{ [ $('Preparar Arquivo Publico').item.json.videoId, $json.id ] }}"
+          }
+        },
+        "credentials": {
+          "postgres": { "id": "b7e1f2a0-0001-4a11-9a11-000000000001", "name": "Postgres - Project Atlas" }
+        }
+      },
+
+      {
+        "id": "if-fb",
+        "name": "Facebook Habilitado?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [2640, 60],
+        "parameters": {
+          "conditions": {
+            "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose", "version": 2 },
+            "conditions": [
+              {
+                "id": "cond-fb",
+                "leftValue": "={{ $('Preparar Arquivo Publico').item.json.fbEnabled }}",
+                "rightValue": "={{ true }}",
+                "operator": { "type": "boolean", "operation": "true", "singleValue": true }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "fb-publicar",
+        "name": "FB - Publicar Video",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [2840, -40],
+        "onError": "continueErrorOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
+        "parameters": {
+          "method": "POST",
+          "url": "={{ $('Config - Publicacao').first().json.fbHost }}/{{ $('Config - Publicacao').first().json.graphVersion }}/{{ $('Config - Publicacao').first().json.fbPageId }}/videos",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpQueryAuth",
+          "sendQuery": true,
+          "queryParameters": {
+            "parameters": [
+              { "name": "file_url", "value": "={{ $('Preparar Arquivo Publico').item.json.publicUrl }}" },
+              { "name": "description", "value": "={{ $('Preparar Arquivo Publico').item.json.caption }}" }
+            ]
+          },
+          "options": { "timeout": 120000 }
+        },
+        "credentials": {
+          "httpQueryAuth": { "id": "metagraphapicred001", "name": "Meta Graph API" }
+        }
+      },
+      {
+        "id": "fb-registrar",
+        "name": "FB - Registrar Publicacao",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [3040, -40],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO video_publications (video_id, network_id, status, external_post_id, published_at)\nSELECT $1, n.id, 'PUBLISHED', $2, now() FROM social_networks n WHERE n.code = 'FACEBOOK'\nON CONFLICT (video_id, network_id) DO UPDATE SET\n  status = 'PUBLISHED', external_post_id = EXCLUDED.external_post_id,\n  published_at = now(), error_message = NULL;",
+          "options": {
+            "queryReplacement": "={{ [ $('Preparar Arquivo Publico').item.json.videoId, $json.id ] }}"
+          }
+        },
+        "credentials": {
+          "postgres": { "id": "b7e1f2a0-0001-4a11-9a11-000000000001", "name": "Postgres - Project Atlas" }
+        }
+      },
+
+      {
+        "id": "consolidar-status",
+        "name": "Consolidar Status Final",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [3240, 60],
+        "notes": "Status derivado das publicacoes reais, nao de suposicao do fluxo.",
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "-- PUBLISHED so quando TODAS as redes habilitadas tem publicacao\n-- confirmada. Contar e comparar (em vez de usar NOT EXISTS) e o que\n-- garante que uma rede sem nenhuma tentativa registrada nao seja\n-- silenciosamente tratada como sucesso.\nUPDATE videos v\nSET status = CASE\n    WHEN (SELECT count(*) FROM social_networks WHERE enabled) > 0\n     AND (SELECT count(*) FROM social_networks WHERE enabled) =\n         (SELECT count(*) FROM video_publications p\n          JOIN social_networks n ON n.id = p.network_id\n          WHERE p.video_id = v.id AND n.enabled AND p.status = 'PUBLISHED')\n      THEN 'PUBLISHED'\n    WHEN EXISTS (\n        SELECT 1 FROM video_publications p\n        WHERE p.video_id = v.id AND p.status = 'PUBLISHED'\n    ) THEN 'PARTIAL'\n    ELSE 'ERROR'\n  END\nWHERE v.id = $1\nRETURNING id, status, drive_file_id, filename;",
+          "options": {
+            "queryReplacement": "={{ [ $('Preparar Arquivo Publico').item.json.videoId ] }}"
+          }
+        },
+        "credentials": {
+          "postgres": { "id": "b7e1f2a0-0001-4a11-9a11-000000000001", "name": "Postgres - Project Atlas" }
+        }
+      },
+      {
+        "id": "if-sucesso",
+        "name": "Publicado com Sucesso?",
+        "type": "n8n-nodes-base.if",
+        "typeVersion": 2.2,
+        "position": [3440, 60],
+        "parameters": {
+          "conditions": {
+            "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "loose", "version": 2 },
+            "conditions": [
+              {
+                "id": "cond-pub",
+                "leftValue": "={{ $json.status }}",
+                "rightValue": "PUBLISHED",
+                "operator": { "type": "string", "operation": "equals" }
+              }
+            ],
+            "combinator": "and"
+          },
+          "options": {}
+        }
+      },
+      {
+        "id": "mover-postados",
+        "name": "Drive - Mover para Postados",
+        "type": "n8n-nodes-base.googleDrive",
+        "typeVersion": 3,
+        "position": [3640, -40],
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
+        "parameters": {
+          "resource": "file",
+          "operation": "move",
+          "fileId": { "__rl": true, "mode": "id", "value": "={{ $json.drive_file_id }}" },
+          "driveId": { "__rl": true, "mode": "list", "value": "My Drive", "cachedResultName": "My Drive" },
+          "folderId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "={{ $('Config - Publicacao').first().json.postadosFolderId }}"
+          }
+        },
+        "credentials": {
+          "googleDriveOAuth2Api": { "id": "DqPqm110gu3MwxJj", "name": "Google Drive account" }
+        }
+      },
+      {
+        "id": "marcar-postados",
+        "name": "Postgres - Marcar Postados",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [3840, -40],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "WITH v AS (\n  UPDATE videos SET current_folder = 'POSTADOS' WHERE id = $1 RETURNING id, filename\n)\nINSERT INTO pipeline_logs (video_id, workflow, level, message)\nSELECT v.id, '03-publicador', 'INFO', 'Publicado e movido para Postados' FROM v;",
+          "options": {
+            "queryReplacement": "={{ [ $('Preparar Arquivo Publico').item.json.videoId ] }}"
+          }
+        },
+        "credentials": {
+          "postgres": { "id": "b7e1f2a0-0001-4a11-9a11-000000000001", "name": "Postgres - Project Atlas" }
+        }
+      },
+      {
+        "id": "mover-erro",
+        "name": "Drive - Mover para Erro",
+        "type": "n8n-nodes-base.googleDrive",
+        "typeVersion": 3,
+        "position": [3640, 200],
+        "onError": "continueRegularOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
+        "parameters": {
+          "resource": "file",
+          "operation": "move",
+          "fileId": { "__rl": true, "mode": "id", "value": "={{ $json.drive_file_id }}" },
+          "driveId": { "__rl": true, "mode": "list", "value": "My Drive", "cachedResultName": "My Drive" },
+          "folderId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "={{ $('Config - Publicacao').first().json.erroFolderId }}"
+          }
+        },
+        "credentials": {
+          "googleDriveOAuth2Api": { "id": "DqPqm110gu3MwxJj", "name": "Google Drive account" }
+        }
+      },
+      {
+        "id": "marcar-erro",
+        "name": "Postgres - Marcar Erro",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [3840, 200],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "WITH v AS (\n  UPDATE videos SET current_folder = 'ERRO' WHERE id = $1 RETURNING id\n)\nINSERT INTO pipeline_logs (video_id, workflow, level, message)\nSELECT v.id, '03-publicador', 'ERROR', 'Publicacao falhou; arquivo movido para Erro' FROM v;",
+          "options": {
+            "queryReplacement": "={{ [ $('Preparar Arquivo Publico').item.json.videoId ] }}"
+          }
+        },
+        "credentials": {
+          "postgres": { "id": "b7e1f2a0-0001-4a11-9a11-000000000001", "name": "Postgres - Project Atlas" }
+        }
+      },
+      {
+        "id": "limpar-media",
+        "name": "Limpar Midia Publica",
+        "type": "n8n-nodes-base.executeCommand",
+        "typeVersion": 1,
+        "position": [4060, 60],
+        "onError": "continueRegularOutput",
+        "notes": "Passo critico de seguranca: tira o arquivo do ar assim que a publicacao termina.",
+        "parameters": {
+          "executeOnce": false,
+          "command": "=rm -f '{{ $('Preparar Arquivo Publico').item.json.publicPath }}'"
+        }
+      },
+
+      {
+        "id": "falha-publicacao",
+        "name": "Registrar Falha de Publicacao",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [2640, 560],
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "language": "javaScript",
+          "jsCode": "const j = $input.item.json;\nconst ctx = $('Preparar Arquivo Publico').item.json;\n\nconst mensagem =\n  j.error?.message ||\n  j.error?.error?.message ||\n  j.error ||\n  j.message ||\n  'Falha desconhecida na publicacao';\n\nreturn {\n  json: {\n    videoId: ctx.videoId,\n    filename: ctx.filename,\n    erro: String(typeof mensagem === 'object' ? JSON.stringify(mensagem) : mensagem).slice(0, 2000),\n  },\n};"
+        }
+      },
+      {
+        "id": "log-falha-pub",
+        "name": "Postgres - Log Falha Publicacao",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [2840, 560],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "WITH v AS (\n  UPDATE videos SET error_message = $2, retry_count = retry_count + 1 WHERE id = $1 RETURNING id\n)\nINSERT INTO pipeline_logs (video_id, workflow, level, message)\nSELECT v.id, '03-publicador', 'ERROR', $2 FROM v;",
+          "options": { "queryReplacement": "={{ [ $json.videoId, $json.erro ] }}" }
+        },
+        "credentials": {
+          "postgres": { "id": "b7e1f2a0-0001-4a11-9a11-000000000001", "name": "Postgres - Project Atlas" }
+        }
+      }
+    ],
+    "connections": {
+      "Gatilho - A Cada 2 Minutos": {
+        "main": [[{ "node": "Config - Publicacao", "type": "main", "index": 0 }]]
+      },
+      "Disparo Manual - Sob Demanda": {
+        "main": [[{ "node": "Config - Publicacao", "type": "main", "index": 0 }]]
+      },
+      "Config - Publicacao": {
+        "main": [[{ "node": "Postgres - Buscar Videos Prontos", "type": "main", "index": 0 }]]
+      },
+      "Postgres - Buscar Videos Prontos": {
+        "main": [[{ "node": "Status - Publicando", "type": "main", "index": 0 }]]
+      },
+      "Status - Publicando": {
+        "main": [[{ "node": "Google Drive - Baixar Video", "type": "main", "index": 0 }]]
+      },
+      "Google Drive - Baixar Video": {
+        "main": [
+          [{ "node": "Preparar Arquivo Publico", "type": "main", "index": 0 }],
+          [{ "node": "Registrar Falha de Publicacao", "type": "main", "index": 0 }]
+        ]
+      },
+      "Preparar Arquivo Publico": {
+        "main": [[{ "node": "Salvar Video em Media Publica", "type": "main", "index": 0 }]]
+      },
+      "Salvar Video em Media Publica": {
+        "main": [
+          [{ "node": "Instagram Habilitado?", "type": "main", "index": 0 }],
+          [{ "node": "Registrar Falha de Publicacao", "type": "main", "index": 0 }]
+        ]
+      },
+      "Instagram Habilitado?": {
+        "main": [
+          [{ "node": "IG - Criar Container", "type": "main", "index": 0 }],
+          [{ "node": "Facebook Habilitado?", "type": "main", "index": 0 }]
+        ]
+      },
+      "IG - Criar Container": {
+        "main": [
+          [{ "node": "IG - Aguardar Processamento", "type": "main", "index": 0 }],
+          [{ "node": "Registrar Falha de Publicacao", "type": "main", "index": 0 }]
+        ]
+      },
+      "IG - Aguardar Processamento": {
+        "main": [[{ "node": "IG - Verificar Status", "type": "main", "index": 0 }]]
+      },
+      "IG - Verificar Status": {
+        "main": [
+          [{ "node": "IG - Container Pronto?", "type": "main", "index": 0 }],
+          [{ "node": "Registrar Falha de Publicacao", "type": "main", "index": 0 }]
+        ]
+      },
+      "IG - Container Pronto?": {
+        "main": [
+          [{ "node": "IG - Publicar", "type": "main", "index": 0 }],
+          [{ "node": "IG - Limite de Tentativas", "type": "main", "index": 0 }]
+        ]
+      },
+      "IG - Limite de Tentativas": {
+        "main": [[{ "node": "IG - Aguardar Processamento", "type": "main", "index": 0 }]]
+      },
+      "IG - Publicar": {
+        "main": [
+          [{ "node": "IG - Registrar Publicacao", "type": "main", "index": 0 }],
+          [{ "node": "Registrar Falha de Publicacao", "type": "main", "index": 0 }]
+        ]
+      },
+      "IG - Registrar Publicacao": {
+        "main": [[{ "node": "Facebook Habilitado?", "type": "main", "index": 0 }]]
+      },
+      "Facebook Habilitado?": {
+        "main": [
+          [{ "node": "FB - Publicar Video", "type": "main", "index": 0 }],
+          [{ "node": "Consolidar Status Final", "type": "main", "index": 0 }]
+        ]
+      },
+      "FB - Publicar Video": {
+        "main": [
+          [{ "node": "FB - Registrar Publicacao", "type": "main", "index": 0 }],
+          [{ "node": "Registrar Falha de Publicacao", "type": "main", "index": 0 }]
+        ]
+      },
+      "FB - Registrar Publicacao": {
+        "main": [[{ "node": "Consolidar Status Final", "type": "main", "index": 0 }]]
+      },
+      "Consolidar Status Final": {
+        "main": [[{ "node": "Publicado com Sucesso?", "type": "main", "index": 0 }]]
+      },
+      "Publicado com Sucesso?": {
+        "main": [
+          [{ "node": "Drive - Mover para Postados", "type": "main", "index": 0 }],
+          [{ "node": "Drive - Mover para Erro", "type": "main", "index": 0 }]
+        ]
+      },
+      "Drive - Mover para Postados": {
+        "main": [[{ "node": "Postgres - Marcar Postados", "type": "main", "index": 0 }]]
+      },
+      "Drive - Mover para Erro": {
+        "main": [[{ "node": "Postgres - Marcar Erro", "type": "main", "index": 0 }]]
+      },
+      "Postgres - Marcar Postados": {
+        "main": [[{ "node": "Limpar Midia Publica", "type": "main", "index": 0 }]]
+      },
+      "Postgres - Marcar Erro": {
+        "main": [[{ "node": "Limpar Midia Publica", "type": "main", "index": 0 }]]
+      },
+      "Registrar Falha de Publicacao": {
+        "main": [[{ "node": "Postgres - Log Falha Publicacao", "type": "main", "index": 0 }]]
+      },
+      "Postgres - Log Falha Publicacao": {
+        "main": [[{ "node": "Consolidar Status Final", "type": "main", "index": 0 }]]
+      }
+    }
+  }
+]

@@ -1,0 +1,418 @@
+[
+  {
+    "id": "wf0002geradorlegendas",
+    "name": "02 - Gerador de Legendas",
+    "active": false,
+    "settings": { "executionOrder": "v1" },
+    "nodes": [
+      {
+        "id": "sticky-02-visao",
+        "name": "Sticky Note - Visao Geral",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [-160, -400],
+        "parameters": {
+          "content": "## 02 - Gerador de Legendas\nMofoMusic Pipeline — Sprint 2\n\nChamado pelo Workflow 01 a cada vídeo novo. Baixa o vídeo do Drive, extrai só o áudio com ffmpeg, transcreve na API do Groq (Whisper) e grava transcrição + legenda SRT no PostgreSQL.\n\nEntrada esperada (vinda do WF01): `id`, `drive_file_id`, `filename`.",
+          "height": 220,
+          "width": 480,
+          "color": 6
+        }
+      },
+      {
+        "id": "sticky-02-entrada",
+        "name": "Sticky Note - Entrada",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [-160, -140],
+        "parameters": {
+          "content": "### 1. ENTRADA\nRecebe o vídeo do Workflow 01 e marca `status = TRANSCRIBING` no banco, para que o vídeo não seja pego por outra execução em paralelo.",
+          "height": 200,
+          "width": 380,
+          "color": 4
+        }
+      },
+      {
+        "id": "sticky-02-processamento",
+        "name": "Sticky Note - Processamento",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [260, -140],
+        "parameters": {
+          "content": "### 2. PROCESSAMENTO\nBaixa o vídeo, grava em disco temporário e extrai **apenas o áudio** (mp3 mono 16 kHz) com ffmpeg.\n\nIsso derruba o tamanho do arquivo em ~95%, mantendo o upload dentro do limite da API do Groq (25 MB no plano free) e acelerando muito o envio.",
+          "height": 240,
+          "width": 520,
+          "color": 4
+        }
+      },
+      {
+        "id": "sticky-02-groq",
+        "name": "Sticky Note - Transcricao",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [820, -140],
+        "parameters": {
+          "content": "### 3. TRANSCRIÇÃO (Groq)\n`POST /openai/v1/audio/transcriptions` com `response_format=verbose_json`, que devolve os segmentos com timestamps — é o que permite montar a legenda SRT.\n\nRetry automático: 3 tentativas com 5s de espera.\n\n**Pendência:** informar a API Key na credencial `Groq API`.",
+          "height": 240,
+          "width": 460,
+          "color": 3
+        }
+      },
+      {
+        "id": "sticky-02-banco",
+        "name": "Sticky Note - Banco",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [1320, -140],
+        "parameters": {
+          "content": "### 4. BANCO\nGrava em `video_transcriptions` (UPSERT por `video_id`, então reprocessar o mesmo vídeo atualiza em vez de duplicar) e move o vídeo para `status = TRANSCRIBED`.\n\nO histórico de status é gravado automaticamente por trigger do banco.",
+          "height": 240,
+          "width": 460,
+          "color": 5
+        }
+      },
+      {
+        "id": "sticky-02-erro",
+        "name": "Sticky Note - Erros",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [820, 400],
+        "parameters": {
+          "content": "### TRATAMENTO DE ERROS\nQualquer falha (download, ffmpeg, Groq, leitura) cai neste ramo: o vídeo vai para `status = ERROR` com a mensagem, `retry_count` é incrementado e o erro é gravado em `pipeline_logs`.\n\nUm vídeo com erro nunca trava os demais.",
+          "height": 240,
+          "width": 480,
+          "color": 2
+        }
+      },
+
+      {
+        "id": "trigger-wf02",
+        "name": "Quando Chamado - Workflow 01",
+        "type": "n8n-nodes-base.executeWorkflowTrigger",
+        "typeVersion": 1,
+        "position": [-120, 100],
+        "parameters": {}
+      },
+      {
+        "id": "prep-contexto",
+        "name": "Preparar Contexto",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [80, 100],
+        "notes": "Normaliza a entrada e monta os caminhos temporarios sanitizados.",
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "language": "javaScript",
+          "jsCode": "const d = $input.item.json;\n\nconst videoId = d.id ?? d.video_id ?? null;\nconst driveFileId = d.drive_file_id ?? d.driveFileId ?? null;\nconst filename = d.filename ?? d.name ?? '';\n\nif (!videoId || !driveFileId) {\n  throw new Error('Entrada invalida: esperado id e drive_file_id vindos do Workflow 01');\n}\n\n// Sanitizacao: o ID do Drive vai virar parte de um caminho passado para o\n// shell no node do ffmpeg. Restringir a [A-Za-z0-9_-] elimina qualquer\n// possibilidade de injecao de comando via nome de arquivo.\nconst safeId = String(driveFileId).replace(/[^A-Za-z0-9_-]/g, '');\nif (!safeId) {\n  throw new Error('drive_file_id sem caracteres validos: ' + driveFileId);\n}\n\nconst ext = filename.includes('.') ? filename.split('.').pop().toLowerCase() : 'mp4';\n\nreturn {\n  json: {\n    videoId,\n    driveFileId,\n    filename,\n    safeId,\n    videoPath: `/tmp/atlas_${safeId}.${ext}`,\n    audioPath: `/tmp/atlas_${safeId}.mp3`,\n  },\n};"
+        }
+      },
+      {
+        "id": "status-transcribing",
+        "name": "Status - Iniciando Transcricao",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [280, 100],
+        "alwaysOutputData": true,
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE videos SET status = 'TRANSCRIBING', error_message = NULL WHERE id = $1;",
+          "options": { "queryReplacement": "={{ [ $json.videoId ] }}" }
+        },
+        "credentials": {
+          "postgres": { "id": "b7e1f2a0-0001-4a11-9a11-000000000001", "name": "Postgres - Project Atlas" }
+        }
+      },
+      {
+        "id": "drive-download",
+        "name": "Google Drive - Baixar Video",
+        "type": "n8n-nodes-base.googleDrive",
+        "typeVersion": 3,
+        "position": [480, 100],
+        "onError": "continueErrorOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
+        "parameters": {
+          "resource": "file",
+          "operation": "download",
+          "fileId": {
+            "__rl": true,
+            "mode": "id",
+            "value": "={{ $('Preparar Contexto').item.json.driveFileId }}"
+          },
+          "options": { "binaryPropertyName": "data" }
+        },
+        "credentials": {
+          "googleDriveOAuth2Api": { "id": "DqPqm110gu3MwxJj", "name": "Google Drive account" }
+        }
+      },
+      {
+        "id": "salvar-disco",
+        "name": "Salvar Video em Disco",
+        "type": "n8n-nodes-base.readWriteFile",
+        "typeVersion": 1,
+        "position": [680, 100],
+        "onError": "continueErrorOutput",
+        "parameters": {
+          "operation": "write",
+          "fileName": "={{ $('Preparar Contexto').item.json.videoPath }}",
+          "dataPropertyName": "data",
+          "options": {}
+        }
+      },
+      {
+        "id": "ffmpeg-extrair",
+        "name": "FFmpeg - Extrair Audio",
+        "type": "n8n-nodes-base.executeCommand",
+        "typeVersion": 1,
+        "position": [880, 100],
+        "onError": "continueErrorOutput",
+        "notes": "mp3 mono 16kHz 64kbps: formato ideal para Whisper e minimo de bytes.",
+        "parameters": {
+          "executeOnce": false,
+          "command": "=ffmpeg -y -i '{{ $('Preparar Contexto').item.json.videoPath }}' -vn -acodec libmp3lame -ar 16000 -ac 1 -b:a 64k '{{ $('Preparar Contexto').item.json.audioPath }}' 2>&1 | tail -3"
+        }
+      },
+      {
+        "id": "ler-audio",
+        "name": "Ler Audio Extraido",
+        "type": "n8n-nodes-base.readWriteFile",
+        "typeVersion": 1,
+        "position": [1080, 100],
+        "onError": "continueErrorOutput",
+        "parameters": {
+          "operation": "read",
+          "fileSelector": "={{ $('Preparar Contexto').item.json.audioPath }}",
+          "options": { "dataPropertyName": "data" }
+        }
+      },
+      {
+        "id": "groq-transcrever",
+        "name": "Groq - Transcrever Audio",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [1280, 100],
+        "onError": "continueErrorOutput",
+        "retryOnFail": true,
+        "maxTries": 3,
+        "waitBetweenTries": 5000,
+        "notes": "verbose_json devolve os segmentos com timestamps, necessarios para montar o SRT.",
+        "parameters": {
+          "method": "POST",
+          "url": "https://api.groq.com/openai/v1/audio/transcriptions",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "contentType": "multipart-form-data",
+          "bodyParameters": {
+            "parameters": [
+              { "parameterType": "formBinaryData", "name": "file", "inputDataFieldName": "data" },
+              { "name": "model", "value": "whisper-large-v3-turbo" },
+              { "name": "response_format", "value": "verbose_json" },
+              { "name": "temperature", "value": "0" }
+            ]
+          },
+          "options": { "timeout": 180000 }
+        },
+        "credentials": {
+          "httpHeaderAuth": { "id": "groqapicred00000001", "name": "Groq API" }
+        }
+      },
+      {
+        "id": "gerar-srt",
+        "name": "Gerar Legenda SRT",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [1480, 100],
+        "notes": "Converte os segmentos com timestamp do Whisper em um arquivo SRT valido.",
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "language": "javaScript",
+          "jsCode": "const r = $input.item.json;\nconst ctx = $('Preparar Contexto').item.json;\n\nconst pad = (n, size) => String(n).padStart(size, '0');\n\n// Converte segundos (float) para o formato de tempo do SRT: HH:MM:SS,mmm\nfunction toSrtTime(seconds) {\n  const total = Math.max(0, Number(seconds) || 0);\n  const h = Math.floor(total / 3600);\n  const m = Math.floor((total % 3600) / 60);\n  const s = Math.floor(total % 60);\n  const ms = Math.round((total - Math.floor(total)) * 1000);\n  return `${pad(h, 2)}:${pad(m, 2)}:${pad(s, 2)},${pad(ms, 3)}`;\n}\n\nconst segments = Array.isArray(r.segments) ? r.segments : [];\nconst transcript = (r.text || '').trim();\n\n// Sem segmentos (audio muito curto ou silencio) ainda geramos um SRT de um\n// bloco so, para nunca deixar o campo vazio quando existe texto.\nlet srt;\nif (segments.length) {\n  srt = segments\n    .map((seg, i) => `${i + 1}\\n${toSrtTime(seg.start)} --> ${toSrtTime(seg.end)}\\n${(seg.text || '').trim()}`)\n    .join('\\n\\n') + '\\n';\n} else if (transcript) {\n  srt = `1\\n00:00:00,000 --> ${toSrtTime(r.duration || 5)}\\n${transcript}\\n`;\n} else {\n  srt = '';\n}\n\nreturn {\n  json: {\n    videoId: ctx.videoId,\n    driveFileId: ctx.driveFileId,\n    filename: ctx.filename,\n    language: r.language || null,\n    transcript,\n    srt,\n    model: 'whisper-large-v3-turbo',\n    durationSeconds: r.duration ?? null,\n    totalSegmentos: segments.length,\n  },\n};"
+        }
+      },
+      {
+        "id": "salvar-transcricao",
+        "name": "Postgres - Salvar Transcricao",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [1680, 100],
+        "notes": "UPSERT por video_id: reprocessar o mesmo video atualiza a linha em vez de duplicar.",
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO video_transcriptions (video_id, language, transcript_text, subtitle_srt, model, duration_seconds)\nVALUES ($1, $2, $3, $4, $5, $6)\nON CONFLICT (video_id) DO UPDATE SET\n  language = EXCLUDED.language,\n  transcript_text = EXCLUDED.transcript_text,\n  subtitle_srt = EXCLUDED.subtitle_srt,\n  model = EXCLUDED.model,\n  duration_seconds = EXCLUDED.duration_seconds,\n  created_at = now()\nRETURNING id, video_id;",
+          "options": {
+            "queryReplacement": "={{ [ $json.videoId, $json.language, $json.transcript, $json.srt, $json.model, $json.durationSeconds ] }}"
+          }
+        },
+        "credentials": {
+          "postgres": { "id": "b7e1f2a0-0001-4a11-9a11-000000000001", "name": "Postgres - Project Atlas" }
+        }
+      },
+      {
+        "id": "status-transcribed",
+        "name": "Status - Transcrito",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [1880, 100],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE videos SET status = 'TRANSCRIBED' WHERE id = $1 RETURNING id, filename, status;",
+          "options": { "queryReplacement": "={{ [ $('Gerar Legenda SRT').item.json.videoId ] }}" }
+        },
+        "credentials": {
+          "postgres": { "id": "b7e1f2a0-0001-4a11-9a11-000000000001", "name": "Postgres - Project Atlas" }
+        }
+      },
+      {
+        "id": "log-sucesso",
+        "name": "Log - Sucesso",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [2080, 100],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO pipeline_logs (video_id, workflow, level, message, context) VALUES ($1, '02-gerador-de-legendas', 'INFO', $2, $3::jsonb);",
+          "options": {
+            "queryReplacement": "={{ [ $('Gerar Legenda SRT').item.json.videoId, 'Transcricao concluida', JSON.stringify({ idioma: $('Gerar Legenda SRT').item.json.language, segmentos: $('Gerar Legenda SRT').item.json.totalSegmentos, duracao: $('Gerar Legenda SRT').item.json.durationSeconds }) ] }}"
+          }
+        },
+        "credentials": {
+          "postgres": { "id": "b7e1f2a0-0001-4a11-9a11-000000000001", "name": "Postgres - Project Atlas" }
+        }
+      },
+      {
+        "id": "limpar-temp",
+        "name": "Limpar Temporarios",
+        "type": "n8n-nodes-base.executeCommand",
+        "typeVersion": 1,
+        "position": [2280, 100],
+        "onError": "continueRegularOutput",
+        "notes": "Remove os arquivos temporarios para nao encher o disco da VM.",
+        "parameters": {
+          "executeOnce": false,
+          "command": "=rm -f '{{ $('Preparar Contexto').item.json.videoPath }}' '{{ $('Preparar Contexto').item.json.audioPath }}'"
+        }
+      },
+
+      {
+        "id": "consolidar-erro",
+        "name": "Consolidar Erro",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [1080, 620],
+        "notes": "Normaliza a mensagem de erro vinda de qualquer um dos nodes do fluxo.",
+        "parameters": {
+          "mode": "runOnceForEachItem",
+          "language": "javaScript",
+          "jsCode": "const j = $input.item.json;\nconst ctx = $('Preparar Contexto').item.json;\n\nconst mensagem =\n  j.error?.message ||\n  j.error ||\n  j.message ||\n  'Falha desconhecida no Workflow 02';\n\nreturn {\n  json: {\n    videoId: ctx.videoId,\n    filename: ctx.filename,\n    erro: String(mensagem).slice(0, 2000),\n  },\n};"
+        }
+      },
+      {
+        "id": "status-erro",
+        "name": "Status - Erro",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [1280, 620],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "UPDATE videos SET status = 'ERROR', error_message = $2, retry_count = retry_count + 1 WHERE id = $1;",
+          "options": { "queryReplacement": "={{ [ $json.videoId, $json.erro ] }}" }
+        },
+        "credentials": {
+          "postgres": { "id": "b7e1f2a0-0001-4a11-9a11-000000000001", "name": "Postgres - Project Atlas" }
+        }
+      },
+      {
+        "id": "log-erro",
+        "name": "Log - Erro",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [1480, 620],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO pipeline_logs (video_id, workflow, level, message, context) VALUES ($1, '02-gerador-de-legendas', 'ERROR', $2, $3::jsonb);",
+          "options": {
+            "queryReplacement": "={{ [ $('Consolidar Erro').item.json.videoId, $('Consolidar Erro').item.json.erro, JSON.stringify({ arquivo: $('Consolidar Erro').item.json.filename }) ] }}"
+          }
+        },
+        "credentials": {
+          "postgres": { "id": "b7e1f2a0-0001-4a11-9a11-000000000001", "name": "Postgres - Project Atlas" }
+        }
+      },
+      {
+        "id": "limpar-temp-erro",
+        "name": "Limpar Temporarios (Erro)",
+        "type": "n8n-nodes-base.executeCommand",
+        "typeVersion": 1,
+        "position": [1680, 620],
+        "onError": "continueRegularOutput",
+        "parameters": {
+          "executeOnce": false,
+          "command": "=rm -f '{{ $('Preparar Contexto').item.json.videoPath }}' '{{ $('Preparar Contexto').item.json.audioPath }}'"
+        }
+      }
+    ],
+    "connections": {
+      "Quando Chamado - Workflow 01": {
+        "main": [[{ "node": "Preparar Contexto", "type": "main", "index": 0 }]]
+      },
+      "Preparar Contexto": {
+        "main": [[{ "node": "Status - Iniciando Transcricao", "type": "main", "index": 0 }]]
+      },
+      "Status - Iniciando Transcricao": {
+        "main": [[{ "node": "Google Drive - Baixar Video", "type": "main", "index": 0 }]]
+      },
+      "Google Drive - Baixar Video": {
+        "main": [
+          [{ "node": "Salvar Video em Disco", "type": "main", "index": 0 }],
+          [{ "node": "Consolidar Erro", "type": "main", "index": 0 }]
+        ]
+      },
+      "Salvar Video em Disco": {
+        "main": [
+          [{ "node": "FFmpeg - Extrair Audio", "type": "main", "index": 0 }],
+          [{ "node": "Consolidar Erro", "type": "main", "index": 0 }]
+        ]
+      },
+      "FFmpeg - Extrair Audio": {
+        "main": [
+          [{ "node": "Ler Audio Extraido", "type": "main", "index": 0 }],
+          [{ "node": "Consolidar Erro", "type": "main", "index": 0 }]
+        ]
+      },
+      "Ler Audio Extraido": {
+        "main": [
+          [{ "node": "Groq - Transcrever Audio", "type": "main", "index": 0 }],
+          [{ "node": "Consolidar Erro", "type": "main", "index": 0 }]
+        ]
+      },
+      "Groq - Transcrever Audio": {
+        "main": [
+          [{ "node": "Gerar Legenda SRT", "type": "main", "index": 0 }],
+          [{ "node": "Consolidar Erro", "type": "main", "index": 0 }]
+        ]
+      },
+      "Gerar Legenda SRT": {
+        "main": [[{ "node": "Postgres - Salvar Transcricao", "type": "main", "index": 0 }]]
+      },
+      "Postgres - Salvar Transcricao": {
+        "main": [[{ "node": "Status - Transcrito", "type": "main", "index": 0 }]]
+      },
+      "Status - Transcrito": {
+        "main": [[{ "node": "Log - Sucesso", "type": "main", "index": 0 }]]
+      },
+      "Log - Sucesso": {
+        "main": [[{ "node": "Limpar Temporarios", "type": "main", "index": 0 }]]
+      },
+      "Consolidar Erro": {
+        "main": [[{ "node": "Status - Erro", "type": "main", "index": 0 }]]
+      },
+      "Status - Erro": {
+        "main": [[{ "node": "Log - Erro", "type": "main", "index": 0 }]]
+      },
+      "Log - Erro": {
+        "main": [[{ "node": "Limpar Temporarios (Erro)", "type": "main", "index": 0 }]]
+      }
+    }
+  }
+]

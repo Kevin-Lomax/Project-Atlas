@@ -1,0 +1,200 @@
+[
+  {
+    "id": "wf0004observabilidade",
+    "name": "04 - Observabilidade",
+    "active": false,
+    "settings": { "executionOrder": "v1" },
+    "nodes": [
+      {
+        "id": "sticky-04-visao",
+        "name": "Sticky Note - Visao Geral",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [-200, -360],
+        "parameters": {
+          "content": "## 04 - Observabilidade\nMofoMusic Pipeline — Sprint 4\n\nDois fluxos independentes:\n\n**A. Dashboard HTTP** — `GET /webhook/dashboard` devolve uma página com o estado do pipeline em tempo real.\n\n**B. Manutenção (15 min)** — grava métricas históricas, destrava vídeos presos e aplica retenção de logs.",
+          "height": 240,
+          "width": 520,
+          "color": 6
+        }
+      },
+      {
+        "id": "sticky-04-dash",
+        "name": "Sticky Note - Dashboard",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [-200, -80],
+        "parameters": {
+          "content": "### A. DASHBOARD\nLê as views do banco (`vw_health`, `vw_publicacoes_por_rede`) e monta o HTML no Code node.\n\nURL: `https://seun8n.duckdns.org/webhook/dashboard`\n\nSó fica disponível com o workflow **ativo**.",
+          "height": 240,
+          "width": 420,
+          "color": 4
+        }
+      },
+      {
+        "id": "sticky-04-manut",
+        "name": "Sticky Note - Manutencao",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [-200, 460],
+        "parameters": {
+          "content": "### B. MANUTENÇÃO AUTOMÁTICA\n1. **Métricas** — snapshot em `pipeline_metrics` (série histórica, permite ver tendência).\n2. **Auto-recuperação** — vídeo parado em `TRANSCRIBING`/`PUBLISHING` há mais de 1h significa execução interrompida; volta ao estado anterior para ser reprocessado sozinho.\n3. **Retenção** — remove logs com mais de 30 dias para o banco não crescer sem limite.",
+          "height": 280,
+          "width": 560,
+          "color": 5
+        }
+      },
+
+      {
+        "id": "wh-dashboard",
+        "name": "Webhook - Dashboard",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [240, 60],
+        "webhookId": "bb000000-0000-4000-8000-000000000004",
+        "parameters": {
+          "path": "dashboard",
+          "httpMethod": "GET",
+          "responseMode": "responseNode",
+          "options": {}
+        }
+      },
+      {
+        "id": "dash-health",
+        "name": "Postgres - Coletar Indicadores",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [460, 60],
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT\n  (SELECT row_to_json(h) FROM vw_health h)                                        AS health,\n  (SELECT COALESCE(json_agg(r), '[]'::json) FROM vw_publicacoes_por_rede r)        AS redes,\n  (SELECT COALESCE(json_agg(e), '[]'::json) FROM (\n      SELECT l.created_at, l.workflow, l.message, v.filename\n      FROM pipeline_logs l\n      LEFT JOIN videos v ON v.id = l.video_id\n      WHERE l.level = 'ERROR'\n      ORDER BY l.created_at DESC\n      LIMIT 10\n  ) e)                                                                            AS erros_recentes,\n  (SELECT COALESCE(json_agg(u), '[]'::json) FROM (\n      SELECT id, filename, status, current_folder, updated_at\n      FROM videos ORDER BY updated_at DESC LIMIT 10\n  ) u)                                                                            AS ultimos_videos;",
+          "options": {}
+        },
+        "credentials": {
+          "postgres": { "id": "b7e1f2a0-0001-4a11-9a11-000000000001", "name": "Postgres - Project Atlas" }
+        }
+      },
+      {
+        "id": "dash-html",
+        "name": "Montar HTML do Dashboard",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [680, 60],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "language": "javaScript",
+          "jsCode": "const d = $input.first().json;\nconst h = d.health || {};\nconst redes = d.redes || [];\nconst erros = d.erros_recentes || [];\nconst ultimos = d.ultimos_videos || [];\n\n// Escapa qualquer texto vindo do banco antes de injetar no HTML:\n// nomes de arquivo e mensagens de erro sao dados externos.\nconst esc = (v) =>\n  String(v ?? '')\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;');\n\nconst n = (v) => Number(v ?? 0);\n\nconst temAlerta = n(h.com_erro) > 0 || n(h.travados) > 0;\n\nconst card = (rotulo, valor, cor) => `\n  <div class=\"card\">\n    <div class=\"valor\" style=\"color:${cor}\">${n(valor)}</div>\n    <div class=\"rotulo\">${rotulo}</div>\n  </div>`;\n\nconst linhasRedes = redes.length\n  ? redes.map((r) => `<tr>\n      <td>${esc(r.rede_nome)}</td>\n      <td>${r.enabled ? '<span class=\"on\">ativa</span>' : '<span class=\"off\">inativa</span>'}</td>\n      <td>${n(r.publicados)}</td>\n      <td>${n(r.erros)}</td>\n      <td>${n(r.pendentes)}</td>\n    </tr>`).join('')\n  : '<tr><td colspan=\"5\" class=\"vazio\">nenhuma rede cadastrada</td></tr>';\n\nconst linhasErros = erros.length\n  ? erros.map((e) => `<tr>\n      <td>${esc(new Date(e.created_at).toLocaleString('pt-BR'))}</td>\n      <td>${esc(e.workflow)}</td>\n      <td>${esc(e.filename || '-')}</td>\n      <td class=\"msg\">${esc(e.message)}</td>\n    </tr>`).join('')\n  : '<tr><td colspan=\"4\" class=\"vazio\">nenhum erro registrado</td></tr>';\n\nconst linhasVideos = ultimos.length\n  ? ultimos.map((v) => `<tr>\n      <td>${n(v.id)}</td>\n      <td>${esc(v.filename)}</td>\n      <td><span class=\"badge b-${esc(v.status)}\">${esc(v.status)}</span></td>\n      <td>${esc(v.current_folder)}</td>\n      <td>${esc(new Date(v.updated_at).toLocaleString('pt-BR'))}</td>\n    </tr>`).join('')\n  : '<tr><td colspan=\"5\" class=\"vazio\">nenhum vídeo no pipeline</td></tr>';\n\nconst html = `<!doctype html>\n<html lang=\"pt-BR\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<meta http-equiv=\"refresh\" content=\"30\">\n<title>Project Atlas — Pipeline</title>\n<style>\n  :root { color-scheme: light dark; }\n  * { box-sizing: border-box; }\n  body { margin:0; padding:24px; font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;\n         background:#0f1115; color:#e6e8ec; }\n  h1 { font-size:20px; margin:0 0 4px; }\n  .sub { color:#8b93a1; font-size:13px; margin-bottom:20px; }\n  .status { display:inline-block; padding:4px 10px; border-radius:999px; font-size:12px; font-weight:600; }\n  .ok { background:#10331f; color:#4ade80; }\n  .alerta { background:#3a2410; color:#fbbf24; }\n  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:12px; margin-bottom:28px; }\n  .card { background:#181b22; border:1px solid #252932; border-radius:10px; padding:14px; text-align:center; }\n  .valor { font-size:26px; font-weight:700; }\n  .rotulo { font-size:11px; color:#8b93a1; text-transform:uppercase; letter-spacing:.5px; margin-top:2px; }\n  h2 { font-size:14px; text-transform:uppercase; letter-spacing:.5px; color:#8b93a1; margin:28px 0 10px; }\n  .wrap { overflow-x:auto; background:#181b22; border:1px solid #252932; border-radius:10px; }\n  table { width:100%; border-collapse:collapse; font-size:13px; min-width:520px; }\n  th { text-align:left; padding:10px 12px; color:#8b93a1; font-weight:600; border-bottom:1px solid #252932; white-space:nowrap; }\n  td { padding:10px 12px; border-bottom:1px solid #1e222a; }\n  tr:last-child td { border-bottom:none; }\n  .vazio { color:#5c636f; text-align:center; font-style:italic; }\n  .msg { color:#f87171; max-width:420px; }\n  .on { color:#4ade80; } .off { color:#5c636f; }\n  .badge { padding:2px 8px; border-radius:6px; font-size:11px; font-weight:600; }\n  .b-PENDING{background:#2a2f3a;color:#9ca3af} .b-TRANSCRIBING{background:#1e293b;color:#60a5fa}\n  .b-TRANSCRIBED{background:#172554;color:#93c5fd} .b-PUBLISHING{background:#3a2410;color:#fbbf24}\n  .b-PUBLISHED{background:#10331f;color:#4ade80} .b-PARTIAL{background:#3a2410;color:#fbbf24}\n  .b-ERROR{background:#3f1d1d;color:#f87171}\n  footer { margin-top:28px; color:#5c636f; font-size:12px; }\n</style>\n</head>\n<body>\n  <h1>Project Atlas — MofoMusic Pipeline</h1>\n  <div class=\"sub\">\n    <span class=\"status ${temAlerta ? 'alerta' : 'ok'}\">${temAlerta ? 'atenção necessária' : 'operacional'}</span>\n    &nbsp;atualizado em ${esc(new Date().toLocaleString('pt-BR'))} · recarrega a cada 30s\n  </div>\n\n  <div class=\"grid\">\n    ${card('Total', h.total_videos, '#e6e8ec')}\n    ${card('Pendentes', h.pendentes, '#9ca3af')}\n    ${card('Transcrevendo', h.transcrevendo, '#60a5fa')}\n    ${card('Transcritos', h.transcritos, '#93c5fd')}\n    ${card('Publicando', h.publicando, '#fbbf24')}\n    ${card('Publicados', h.publicados, '#4ade80')}\n    ${card('Parciais', h.parciais, '#fbbf24')}\n    ${card('Com erro', h.com_erro, '#f87171')}\n    ${card('Travados', h.travados, '#f87171')}\n    ${card('Erros 24h', h.erros_24h, '#f87171')}\n  </div>\n\n  <h2>Publicações por rede</h2>\n  <div class=\"wrap\"><table>\n    <thead><tr><th>Rede</th><th>Estado</th><th>Publicados</th><th>Erros</th><th>Pendentes</th></tr></thead>\n    <tbody>${linhasRedes}</tbody>\n  </table></div>\n\n  <h2>Últimos vídeos</h2>\n  <div class=\"wrap\"><table>\n    <thead><tr><th>#</th><th>Arquivo</th><th>Status</th><th>Pasta</th><th>Atualizado</th></tr></thead>\n    <tbody>${linhasVideos}</tbody>\n  </table></div>\n\n  <h2>Erros recentes</h2>\n  <div class=\"wrap\"><table>\n    <thead><tr><th>Quando</th><th>Workflow</th><th>Arquivo</th><th>Mensagem</th></tr></thead>\n    <tbody>${linhasErros}</tbody>\n  </table></div>\n\n  <footer>Project Atlas · dados lidos diretamente do PostgreSQL</footer>\n</body>\n</html>`;\n\nreturn [{ json: { html } }];"
+        }
+      },
+      {
+        "id": "dash-responder",
+        "name": "Responder Dashboard",
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.1,
+        "position": [900, 60],
+        "parameters": {
+          "respondWith": "text",
+          "responseBody": "={{ $json.html }}",
+          "options": {
+            "responseHeaders": {
+              "entries": [{ "name": "Content-Type", "value": "text/html; charset=utf-8" }]
+            }
+          }
+        }
+      },
+
+      {
+        "id": "cron-manut",
+        "name": "Gatilho - A Cada 15 Minutos",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [240, 640],
+        "parameters": { "rule": { "interval": [{ "field": "minutes", "minutesInterval": 15 }] } }
+      },
+      {
+        "id": "coletar-metricas",
+        "name": "Postgres - Gravar Metricas",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [460, 640],
+        "notes": "Snapshot historico: as views mostram o agora, esta tabela mostra a tendencia.",
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "INSERT INTO pipeline_metrics (\n  total_videos, pendentes, transcrevendo, transcritos,\n  publicando, publicados, parciais, com_erro, erros_24h, detalhes\n)\nSELECT total_videos, pendentes, transcrevendo, transcritos,\n       publicando, publicados, parciais, com_erro, erros_24h,\n       row_to_json(h)::jsonb\nFROM vw_health h\nRETURNING id, coletado_em, total_videos, com_erro, travados;",
+          "options": {}
+        },
+        "credentials": {
+          "postgres": { "id": "b7e1f2a0-0001-4a11-9a11-000000000001", "name": "Postgres - Project Atlas" }
+        }
+      },
+      {
+        "id": "destravar",
+        "name": "Postgres - Destravar Presos",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [680, 640],
+        "notes": "Auto-recuperacao: execucao interrompida deixa o video preso em estado transitorio.",
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "WITH destravados AS (\n  UPDATE videos\n  SET status = CASE\n        WHEN status = 'TRANSCRIBING' THEN 'PENDING'\n        WHEN status = 'PUBLISHING'   THEN 'TRANSCRIBED'\n      END,\n      error_message = 'Reprocessamento automatico: execucao anterior nao concluiu'\n  WHERE status IN ('TRANSCRIBING', 'PUBLISHING')\n    AND updated_at < now() - INTERVAL '1 hour'\n  RETURNING id, filename, status\n)\nINSERT INTO pipeline_logs (video_id, workflow, level, message)\nSELECT id, '04-observabilidade', 'WARN',\n       'Video destravado automaticamente e devolvido para ' || status\nFROM destravados\nRETURNING video_id, message;",
+          "options": {}
+        },
+        "credentials": {
+          "postgres": { "id": "b7e1f2a0-0001-4a11-9a11-000000000001", "name": "Postgres - Project Atlas" }
+        }
+      },
+      {
+        "id": "retencao-logs",
+        "name": "Postgres - Retencao de Logs",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [900, 640],
+        "notes": "Mantem 30 dias de logs; sem isso a tabela cresce sem limite.",
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "SELECT purge_pipeline_logs(30) AS logs_removidos;",
+          "options": {}
+        },
+        "credentials": {
+          "postgres": { "id": "b7e1f2a0-0001-4a11-9a11-000000000001", "name": "Postgres - Project Atlas" }
+        }
+      },
+      {
+        "id": "limpar-media-orfa",
+        "name": "Limpar Midia Orfa",
+        "type": "n8n-nodes-base.executeCommand",
+        "typeVersion": 1,
+        "position": [1120, 640],
+        "onError": "continueRegularOutput",
+        "notes": "Rede de seguranca: remove arquivos publicos esquecidos por execucao interrompida.",
+        "parameters": {
+          "executeOnce": true,
+          "command": "find /media -type f -mmin +120 -delete 2>/dev/null; echo limpeza-ok"
+        }
+      }
+    ],
+    "connections": {
+      "Webhook - Dashboard": {
+        "main": [[{ "node": "Postgres - Coletar Indicadores", "type": "main", "index": 0 }]]
+      },
+      "Postgres - Coletar Indicadores": {
+        "main": [[{ "node": "Montar HTML do Dashboard", "type": "main", "index": 0 }]]
+      },
+      "Montar HTML do Dashboard": {
+        "main": [[{ "node": "Responder Dashboard", "type": "main", "index": 0 }]]
+      },
+      "Gatilho - A Cada 15 Minutos": {
+        "main": [[{ "node": "Postgres - Gravar Metricas", "type": "main", "index": 0 }]]
+      },
+      "Postgres - Gravar Metricas": {
+        "main": [[{ "node": "Postgres - Destravar Presos", "type": "main", "index": 0 }]]
+      },
+      "Postgres - Destravar Presos": {
+        "main": [[{ "node": "Postgres - Retencao de Logs", "type": "main", "index": 0 }]]
+      },
+      "Postgres - Retencao de Logs": {
+        "main": [[{ "node": "Limpar Midia Orfa", "type": "main", "index": 0 }]]
+      }
+    }
+  }
+]
