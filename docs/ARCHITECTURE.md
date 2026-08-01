@@ -2,37 +2,69 @@
 
 ## Visão geral
 
-O Project Atlas é composto por três serviços orquestrados via Docker Compose, conectados por uma única rede bridge (`app-network`).
+O Project Atlas é composto por três serviços orquestrados via Docker Compose, conectados por uma única rede bridge (`app-network`), mais duas camadas de segurança/operação que rodam diretamente no host da VM (fora do Docker Compose): Certbot (TLS) e Fail2Ban (proteção do SSH).
 
-## Serviços
+## Serviços (Docker Compose)
 
 ### PostgreSQL
 
 - Imagem: `postgres:15-alpine`.
 - Persistência: volume Docker nomeado `postgres_data`, gerenciado pelo próprio Docker.
 - Configuração via variáveis de ambiente em `.env` (`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`).
+- Healthcheck via `pg_isready`.
 
 ### n8n
 
 - Imagem: `n8nio/n8n:2.32.1`.
 - Persistência: volume nomeado `n8n_data`.
-- Autenticação básica habilitada via variáveis de ambiente (`N8N_BASIC_AUTH_*`).
-- Não exposto diretamente para fora da rede interna — a única porta publicada ao host é a `80`, do Nginx.
+- Autenticação feita pelo sistema de usuários próprio do n8n (conta de owner criada na primeira execução via `/setup`) — as antigas variáveis `N8N_BASIC_AUTH_*` foram removidas por estarem depreciadas e sem efeito.
+- Não exposto diretamente para fora da rede interna — a única forma de acesso externo é via Nginx.
+- Healthcheck via `/healthz`; o Nginx só inicia depois que o n8n reporta saudável (`depends_on: condition: service_healthy`).
 
 ### Nginx
 
-- Imagem: `nginx:stable-alpine`.
-- Porta `80` exposta ao host.
-- Atua como camada de ingress: reverse proxy para o n8n (`ingress/nginx/default.conf`), incluindo suporte a WebSocket (necessário para a interface do n8n).
-- Sem terminação TLS/HTTPS implementada nesta camada — o serviço atende apenas HTTP na porta 80.
+- Imagem: `nginx:1.30-alpine` (pinada, alinhada com a versão em produção).
+- Portas `80` e `443` expostas ao host.
+- Porta 80: só responde ao desafio ACME (`/.well-known/acme-challenge/`) do Let's Encrypt e redireciona (301) todo o resto para HTTPS.
+- Porta 443: termina TLS (certificado emitido pelo Certbot) e faz proxy reverso para o n8n, incluindo suporte a WebSocket (necessário para a interface do n8n) e timeouts de proxy estendidos (300s) para acomodar execuções longas de workflow via webhook.
+- Envia `Strict-Transport-Security` e restringe a `TLSv1.2`/`TLSv1.3`.
+- Healthcheck próprio (`wget` contra `https://127.0.0.1` internamente).
+
+## Camada de segurança e TLS (host da VM, fora do Docker Compose)
+
+### Certbot
+
+- Instalado via `apt` diretamente no host (não é um container).
+- Certificado emitido por webroot (`ingress/certbot/www`, montado no Nginx), evitando downtime durante a emissão.
+- Renovação automática via timer do systemd (`certbot.timer`), com hook em `/etc/letsencrypt/renewal-hooks/deploy/` que recarrega o Nginx do Docker (`nginx -s reload`) após cada renovação.
+- Os arquivos do certificado (`/etc/letsencrypt`) são montados como bind mount somente leitura no container do Nginx.
+
+### Fail2Ban
+
+- Instalado via `apt` no host. Jail `sshd` habilitada: 5 tentativas em 10 minutos, ban de 1 hora.
+
+### UFW (firewall)
+
+- Libera apenas `22/tcp`, `80/tcp` e `443/tcp` (v4 e v6); nega o resto por padrão.
+
+### SSH
+
+- Login por senha desabilitado (`PasswordAuthentication no`), root só via chave (`PermitRootLogin without-password`).
+
+## Backup
+
+- Script `/opt/backups/backup.sh` no host (fora do repositório), agendado via cron diariamente às 03:00.
+- Faz dump do PostgreSQL, export dos workflows (`n8n export:workflow`) e cópia do volume `n8n_data`, compactando tudo em um `.tar.gz` por execução.
+- Retenção automática: mantém apenas os 7 backups mais recentes.
 
 ## Rede
 
-Um único network bridge (`app-network`) conecta os três serviços. Não há segmentação adicional de rede neste estágio.
+Um único network bridge (`app-network`) conecta os três serviços do Docker Compose. Não há segmentação adicional de rede neste estágio.
 
 ## Diretórios reservados
 
 - `ingress/nginx/` — contém a configuração do Nginx, conectada ao serviço via bind mount somente leitura.
+- `ingress/certbot/www/` — webroot usado no desafio HTTP-01 do Let's Encrypt.
 - `workflows/` — reservado para definições de workflows do n8n (ainda não utilizado).
 
 ## Restrições arquiteturais
