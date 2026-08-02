@@ -25,7 +25,7 @@
         "typeVersion": 1,
         "position": [-200, -80],
         "parameters": {
-          "content": "### A. DASHBOARD\nLê as views do banco (`vw_health`, `vw_publicacoes_por_rede`) e monta o HTML no Code node.\n\nURL: `https://seun8n.duckdns.org/webhook/dashboard`\n\nSó fica disponível com o workflow **ativo**.",
+          "content": "### A. DASHBOARD\nLê as views do banco (`vw_health`, `vw_publicacoes_por_rede`) e monta o HTML no Code node.\n\nURL: `https://SEU-DOMINIO.duckdns.org/webhook/dashboard`\n\nSó fica disponível com o workflow **ativo**.",
           "height": 240,
           "width": 420,
           "color": 4

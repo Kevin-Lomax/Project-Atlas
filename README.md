@@ -58,6 +58,29 @@ Teste automatizado do pipeline (roda em transação e faz rollback, não suja o 
 docker exec -i project-atlas-postgres-1 psql -U n8n_user -d n8n -v ON_ERROR_STOP=1 < db/tests/test_pipeline.sql
 ```
 
+## Configurando sua própria instância
+
+Este repositório é um **template**: nenhum dado de conta, credencial ou token está versionado. Todos os valores específicos de instalação aparecem como `COLOQUE_...` ou `SEU-DOMINIO`, e ficam só na sua VM.
+
+O que você precisa preencher:
+
+| Onde | O quê |
+|---|---|
+| `.env` (copiado de `.env.example`) | senha do PostgreSQL, seu domínio, timezone |
+| `ingress/nginx/default.conf` | trocar `SEU-DOMINIO.duckdns.org` pelo seu domínio (3 ocorrências) |
+| n8n → Credentials | Google Drive OAuth2, Groq API, Meta Graph API, Postgres |
+| Workflow 01 → node `Config - Pastas do Drive` | IDs das pastas **Entrada** e **Fila** |
+| Workflow 03 → node `Config - Publicacao` | Instagram Business Account ID, Facebook Page ID, IDs das pastas **Postados** e **Erro**, e `mediaBaseUrl` com seu domínio |
+
+O ID de uma pasta do Drive aparece na URL: `drive.google.com/drive/folders/<ID>`.
+
+### Armadilhas que custam tempo
+
+- **Credenciais no n8n**: cole o valor puro. Um `=` no início faz o n8n tratar o campo como *expressão*, não texto — é a causa mais comum de "chave inválida" com uma chave que está correta.
+- **Groq**: o header precisa do prefixo `Bearer `. **Meta**: só o token, sem `Bearer`.
+- **Variáveis obrigatórias no `.env`**: `NODES_EXCLUDE`, `N8N_RESTRICT_FILE_ACCESS_TO` e `N8N_CONCURRENCY_PRODUCTION_LIMIT`. Sem elas os workflows 02, 03 e 04 não ativam ou falham ao gravar arquivos. Ver comentários no `.env.example`.
+- **Meta**: use conta Instagram Profissional vinculada a uma Página, e prefira um Page token que não expira (obtido via `/me/accounts` com user token de longa duração).
+
 ## Estrutura do projeto
 
 ```

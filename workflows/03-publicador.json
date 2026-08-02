@@ -77,7 +77,7 @@
         "typeVersion": 1,
         "position": [-200, 480],
         "parameters": {
-          "content": "### CREDENCIAIS — CONFIGURADO\nPágina **MofoMusic** vinculada ao Instagram **@mofo.music**.\n\nO token é um **Page access token**, por isso `igHost` aponta para `graph.facebook.com` (variante *Instagram API with Facebook Login*), e não para `graph.instagram.com`.\n\n⚠️ **O token expira por volta de 01/10/2026.** Para um que não expira: obter um user token de longa duração e então chamar `/me/accounts` — os Page tokens derivados dele não expiram.",
+          "content": "### CREDENCIAIS\nÉ preciso uma Página do Facebook vinculada a uma conta Instagram **Profissional**.\n\nCom um **Page access token**, `igHost` deve ser `graph.facebook.com` (variante *Instagram API with Facebook Login*). Só use `graph.instagram.com` se o token for de Instagram Login — aí a publicação na Página não funciona.\n\n⚠️ **Atenção à validade do token.** Page tokens estendidos direto duram ~60 dias. Para um que **não expira**: obtenha um user token de longa duração e então chame `/me/accounts` — os Page tokens derivados dele não expiram.",
           "height": 280,
           "width": 480,
           "color": 2
@@ -119,14 +119,14 @@
           "mode": "manual",
           "assignments": {
             "assignments": [
-              { "id": "c-01", "name": "igUserId", "value": "17841425571070249", "type": "string" },
-              { "id": "c-02", "name": "fbPageId", "value": "1064485180091547", "type": "string" },
+              { "id": "c-01", "name": "igUserId", "value": "COLOQUE_O_INSTAGRAM_BUSINESS_ACCOUNT_ID", "type": "string" },
+              { "id": "c-02", "name": "fbPageId", "value": "COLOQUE_O_FACEBOOK_PAGE_ID", "type": "string" },
               { "id": "c-03", "name": "graphVersion", "value": "v25.0", "type": "string" },
               { "id": "c-04", "name": "igHost", "value": "https://graph.facebook.com", "type": "string" },
               { "id": "c-05", "name": "fbHost", "value": "https://graph.facebook.com", "type": "string" },
-              { "id": "c-06", "name": "mediaBaseUrl", "value": "https://seun8n.duckdns.org/media", "type": "string" },
-              { "id": "c-07", "name": "postadosFolderId", "value": "1OJ2QIjHibsLA5oC15130OaU5EG6O2Zso", "type": "string" },
-              { "id": "c-08", "name": "erroFolderId", "value": "1-kl_w8SQkl4NU2nOi-UoTPQuWWyFEwIe", "type": "string" }
+              { "id": "c-06", "name": "mediaBaseUrl", "value": "https://SEU-DOMINIO.duckdns.org/media", "type": "string" },
+              { "id": "c-07", "name": "postadosFolderId", "value": "COLOQUE_O_ID_DA_PASTA_POSTADOS", "type": "string" },
+              { "id": "c-08", "name": "erroFolderId", "value": "COLOQUE_O_ID_DA_PASTA_ERRO", "type": "string" }
             ]
           },
           "options": {}
