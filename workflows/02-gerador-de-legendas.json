@@ -93,6 +93,31 @@
         "parameters": {}
       },
       {
+        "id": "trigger-cron-02",
+        "name": "Gatilho - Recuperar Pendentes",
+        "type": "n8n-nodes-base.scheduleTrigger",
+        "typeVersion": 1.2,
+        "position": [-120, 300],
+        "notes": "Rede de seguranca: pega videos PENDING que o WF01 nao conseguiu encaminhar.",
+        "parameters": { "rule": { "interval": [{ "field": "minutes", "minutesInterval": 2 }] } }
+      },
+      {
+        "id": "buscar-pendentes",
+        "name": "Postgres - Buscar Pendentes",
+        "type": "n8n-nodes-base.postgres",
+        "typeVersion": 2.7,
+        "position": [80, 300],
+        "notes": "Um video so sai de PENDING por aqui; sem isso ele ficaria orfao apos sair da pasta Entrada.",
+        "parameters": {
+          "operation": "executeQuery",
+          "query": "-- LIMIT 1: a VM tem menos de 1 GB de RAM e cada video passa por\n-- download + gravacao em disco + ffmpeg. Processar em paralelo derruba\n-- a instancia (verificado em execucao real com 3 videos simultaneos).\nSELECT id, drive_file_id, filename\nFROM videos\nWHERE status = 'PENDING'\n  AND current_folder = 'FILA'\nORDER BY created_at\nLIMIT 1;",
+          "options": {}
+        },
+        "credentials": {
+          "postgres": { "id": "b7e1f2a0-0001-4a11-9a11-000000000001", "name": "Postgres - Project Atlas" }
+        }
+      },
+      {
         "id": "prep-contexto",
         "name": "Preparar Contexto",
         "type": "n8n-nodes-base.code",
@@ -354,6 +379,12 @@
     ],
     "connections": {
       "Quando Chamado - Workflow 01": {
+        "main": [[{ "node": "Preparar Contexto", "type": "main", "index": 0 }]]
+      },
+      "Gatilho - Recuperar Pendentes": {
+        "main": [[{ "node": "Postgres - Buscar Pendentes", "type": "main", "index": 0 }]]
+      },
+      "Postgres - Buscar Pendentes": {
         "main": [[{ "node": "Preparar Contexto", "type": "main", "index": 0 }]]
       },
       "Preparar Contexto": {
