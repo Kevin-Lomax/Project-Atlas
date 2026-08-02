@@ -12,8 +12,8 @@
         "typeVersion": 1,
         "position": [-200, -460],
         "parameters": {
-          "content": "## 03 - Publicador\nMofoMusic Pipeline — Sprint 3\n\nPega vídeos com `status = TRANSCRIBED`, publica no Instagram (Reels) e no Facebook (Page) e move o arquivo no Drive:\n\n**Fila → Postados** (sucesso) ou **Fila → Erro** (falha)\n\nA arquitetura já suporta outras redes: basta habilitá-las em `social_networks` e acrescentar o ramo correspondente.",
-          "height": 260,
+          "content": "## 03 - Publicador\nMofoMusic Pipeline — Sprint 3\n\nRoda às **12:00 e 18:00** (horário de Brasília) e publica **1 vídeo por disparo** — 2 por dia.\n\nPega o mais antigo com `status = TRANSCRIBED`, publica no Instagram (Reels) e Facebook (Page) e move o arquivo:\n\n**Fila → Postados** (sucesso) ou **Fila → Erro** (falha)\n\nA fila é a própria tabela `videos`: não há tabela de fila separada. Para mudar o ritmo, basta editar o gatilho.",
+          "height": 300,
           "width": 520,
           "color": 6
         }
@@ -86,11 +86,19 @@
 
       {
         "id": "trigger-cron-03",
-        "name": "Gatilho - A Cada 2 Minutos",
+        "name": "Gatilho - 12h e 18h",
         "type": "n8n-nodes-base.scheduleTrigger",
         "typeVersion": 1.2,
         "position": [-160, 60],
-        "parameters": { "rule": { "interval": [{ "field": "minutes", "minutesInterval": 2 }] } }
+        "notes": "Dois horarios por dia, no fuso da VM (America/Sao_Paulo). Cada disparo publica exatamente 1 video.",
+        "parameters": {
+          "rule": {
+            "interval": [
+              { "field": "days", "daysInterval": 1, "triggerAtHour": 12, "triggerAtMinute": 0 },
+              { "field": "days", "daysInterval": 1, "triggerAtHour": 18, "triggerAtMinute": 0 }
+            ]
+          }
+        }
       },
       {
         "id": "trigger-manual-03",
@@ -133,7 +141,7 @@
         "notes": "Lote pequeno por execucao: evita estourar rate limit da Meta e memoria da VM.",
         "parameters": {
           "operation": "executeQuery",
-          "query": "SELECT v.id,\n       v.drive_file_id,\n       v.filename,\n       COALESCE(t.transcript_text, '') AS transcript,\n       (SELECT enabled FROM social_networks WHERE code = 'INSTAGRAM') AS ig_enabled,\n       (SELECT enabled FROM social_networks WHERE code = 'FACEBOOK') AS fb_enabled\nFROM videos v\nLEFT JOIN video_transcriptions t ON t.video_id = v.id\nWHERE v.status = 'TRANSCRIBED'\nORDER BY v.created_at\nLIMIT 3;",
+          "query": "-- LIMIT 1: cada disparo publica exatamente um video. Combinado com o\n-- gatilho de 12h e 18h, isso da 2 publicacoes por dia. A fila e a\n-- propria tabela: ORDER BY created_at garante FIFO (o mais antigo sai\n-- primeiro), sem precisar de tabela de fila separada.\nSELECT v.id,\n       v.drive_file_id,\n       v.filename,\n       COALESCE(t.transcript_text, '') AS transcript,\n       (SELECT enabled FROM social_networks WHERE code = 'INSTAGRAM') AS ig_enabled,\n       (SELECT enabled FROM social_networks WHERE code = 'FACEBOOK') AS fb_enabled\nFROM videos v\nLEFT JOIN video_transcriptions t ON t.video_id = v.id\nWHERE v.status = 'TRANSCRIBED'\nORDER BY v.created_at\nLIMIT 1;",
           "options": {}
         },
         "credentials": {
@@ -601,7 +609,7 @@
       }
     ],
     "connections": {
-      "Gatilho - A Cada 2 Minutos": {
+      "Gatilho - 12h e 18h": {
         "main": [[{ "node": "Config - Publicacao", "type": "main", "index": 0 }]]
       },
       "Disparo Manual - Sob Demanda": {
