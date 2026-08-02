@@ -38,7 +38,7 @@
         "typeVersion": 1,
         "position": [900, -460],
         "parameters": {
-          "content": "### INSTAGRAM (Reels)\nPublicação em 3 etapas, como a API exige:\n\n1. cria o *container* (`/media`)\n2. faz polling do `status_code` até `FINISHED`\n3. publica (`/media_publish`)\n\nO polling é limitado a ~10 tentativas (≈3 min); passando disso vira erro, conforme a recomendação da própria Meta.",
+          "content": "### INSTAGRAM (Reels)\nPublicação em 3 etapas, como a API exige:\n\n1. cria o *container* (`/media`)\n2. faz polling do `status_code` até `FINISHED`\n3. publica (`/media_publish`)\n\nO polling é limitado a ~10 tentativas (≈3 min); passando disso vira erro, conforme a recomendação da própria Meta.\n\n`share_to_feed` faz o Reel aparecer também no feed e na grade do perfil, não só na aba Reels — mais superfície de exibição pelo mesmo post. Controlado em **Config - Publicacao**.",
           "height": 260,
           "width": 480,
           "color": 4
@@ -128,7 +128,8 @@
               { "id": "c-07", "name": "postadosFolderId", "value": "COLOQUE_O_ID_DA_PASTA_POSTADOS", "type": "string" },
               { "id": "c-08", "name": "erroFolderId", "value": "COLOQUE_O_ID_DA_PASTA_ERRO", "type": "string" },
               { "id": "c-09", "name": "hashtags", "value": "#musicanordestina #forro #nordeste #mpb #musicabrasileira #saudade #brega #sofrencia #vozeviolao #musica", "type": "string" },
-              { "id": "c-10", "name": "captionPrefixo", "value": "🎵", "type": "string" }
+              { "id": "c-10", "name": "captionPrefixo", "value": "🎵", "type": "string" },
+              { "id": "c-11", "name": "shareToFeed", "value": "true", "type": "string" }
             ]
           },
           "options": {}
@@ -258,7 +259,8 @@
             "parameters": [
               { "name": "media_type", "value": "REELS" },
               { "name": "video_url", "value": "={{ $('Preparar Arquivo Publico').item.json.publicUrl }}" },
-              { "name": "caption", "value": "={{ $('Preparar Arquivo Publico').item.json.caption }}" }
+              { "name": "caption", "value": "={{ $('Preparar Arquivo Publico').item.json.caption }}" },
+              { "name": "share_to_feed", "value": "={{ $('Config - Publicacao').first().json.shareToFeed }}" }
             ]
           },
           "options": { "timeout": 60000 }

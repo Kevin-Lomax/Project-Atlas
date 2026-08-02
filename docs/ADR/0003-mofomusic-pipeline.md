@@ -53,6 +53,21 @@ A Meta Graph API não aceita upload direto de vídeo neste fluxo: exige uma URL 
 
 Mitigações: nome de arquivo aleatório (32 caracteres), `autoindex off`, `Cache-Control: no-store`, remoção imediata após publicação e uma limpeza de órfãos a cada 15 minutos no Workflow 04.
 
+### Parâmetros de publicação verificados empiricamente
+
+A Graph API **ignora silenciosamente parâmetros desconhecidos** na criação do container — enviar um campo inexistente devolve sucesso normalmente. Isso significa que "a API aceitou" não prova que o parâmetro existe, e código construído sobre essa suposição vira decoração: parece configurar algo e não configura nada.
+
+O teste que discrimina é enviar um **valor inválido**: se o parâmetro for real, a API valida e rejeita; se não existir, ela ignora.
+
+Resultado para `media_type=REELS` na v25.0:
+
+| Parâmetro | Veredito |
+|---|---|
+| `share_to_feed` | **existe** — `(#100) Param share_to_feed must be a boolean` |
+| `thumb_offset` | **não existe** — ignorado, igual a um campo inventado |
+
+Só `share_to_feed` foi implementado. Ele faz o Reel aparecer também no feed e na grade do perfil, não apenas na aba Reels — mais superfície de exibição pelo mesmo post.
+
 ### Catálogo de redes em vez de workflows por rede
 
 `social_networks` cataloga as oito redes previstas; `video_publications` guarda uma linha por (vídeo, rede). Instagram e Facebook estão habilitados; TikTok, YouTube Shorts, Threads, X, Pinterest e LinkedIn estão cadastrados e **desabilitados**.

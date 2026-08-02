@@ -222,6 +222,10 @@ Para mudar o ritmo, edite o gatilho `Gatilho - 12h e 18h` no editor do n8n: acre
 
 A cada disparo, o vídeo mais antigo em `TRANSCRIBED` é publicado no Instagram (Reels) e no Facebook (Page), e então movido no Drive para `Postados` — ou para `Erro`, se falhar.
 
+A legenda é montada a partir da transcrição, em três blocos: nome do arquivo como cabeçalho, letra com um verso por linha (extraída do SRT) e hashtags. As hashtags e o prefixo ficam no node `Config - Publicacao` — edite conforme seu nicho. No truncamento para o limite de 2200 caracteres do Instagram, quem cede espaço é a letra; as hashtags nunca são cortadas.
+
+`share_to_feed` está ativo por padrão: o Reel aparece também no feed e na grade do perfil, não só na aba Reels.
+
 > A Meta **não aceita upload direto** de vídeo neste fluxo: ela exige uma URL de onde baixar o arquivo. Por isso o vídeo é gravado temporariamente em `/media`, servido pelo Nginx sob HTTPS com nome aleatório, e **apagado logo após a publicação**. O diretório não permite listagem, e o Workflow 04 remove órfãos a cada 15 minutos.
 
 ## Monitoramento
