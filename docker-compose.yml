@@ -54,7 +54,11 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./ingress/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      # NGINX_CONF permite alternar entre a configuração de produção (padrão)
+      # e a de bootstrap, usada só na primeira instalação — antes de o
+      # certificado existir, o bloco 443 impede o Nginx de iniciar.
+      # Ver "Instalação" no README.
+      - ./ingress/nginx/${NGINX_CONF:-default.conf}:/etc/nginx/conf.d/default.conf:ro
       - ./ingress/certbot/www:/var/www/certbot:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
       - media_data:/var/www/media:ro
