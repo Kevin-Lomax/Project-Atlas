@@ -127,8 +127,8 @@
               { "id": "c-06", "name": "mediaBaseUrl", "value": "https://SEU-DOMINIO.duckdns.org/media", "type": "string" },
               { "id": "c-07", "name": "postadosFolderId", "value": "COLOQUE_O_ID_DA_PASTA_POSTADOS", "type": "string" },
               { "id": "c-08", "name": "erroFolderId", "value": "COLOQUE_O_ID_DA_PASTA_ERRO", "type": "string" },
-              { "id": "c-09", "name": "hashtags", "value": "#mofomusic #flashback #nostalgia #musicasantigas #classicos #brega #seresta #musicabrasileira", "type": "string" },
-              { "id": "c-10", "name": "ganchos", "value": "Quem lembra dessa?|Essa bate diferente.|Quem conhece, conhece.|Essa aqui não envelhece.|Bateu a saudade?", "type": "string" },
+              { "id": "c-09", "name": "hashtags", "value": "#SUAMARCA #SEUNICHO #PALAVRACHAVE", "type": "string" },
+              { "id": "c-10", "name": "ganchos", "value": "Primeiro gancho curto?|Segundo gancho curto.|Terceiro gancho curto?", "type": "string" },
               { "id": "c-11", "name": "incluirLetra", "value": "false", "type": "string" },
               { "id": "c-12", "name": "shareToFeed", "value": "true", "type": "string" }
             ]

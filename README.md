@@ -222,7 +222,19 @@ Para mudar o ritmo, edite o gatilho `Gatilho - 12h e 18h` no editor do n8n: acre
 
 A cada disparo, o vídeo mais antigo em `TRANSCRIBED` é publicado no Instagram (Reels) e no Facebook (Page), e então movido no Drive para `Postados` — ou para `Erro`, se falhar.
 
-A legenda é montada a partir da transcrição, em três blocos: nome do arquivo como cabeçalho, letra com um verso por linha (extraída do SRT) e hashtags. As hashtags e o prefixo ficam no node `Config - Publicacao` — edite conforme seu nicho. No truncamento para o limite de 2200 caracteres do Instagram, quem cede espaço é a letra; as hashtags nunca são cortadas.
+A legenda é montada como **gancho curto + hashtags**. O gancho é sorteado de uma lista pelo id do vídeo: determinístico (reprocessar dá o mesmo resultado) e evita que posts seguidos saiam com texto idêntico.
+
+Ambos ficam no node `Config - Publicacao` e vêm com placeholders — **preencha com a sua marca e o seu nicho**:
+
+| Campo | O quê |
+|---|---|
+| `hashtags` | suas hashtags, separadas por espaço |
+| `ganchos` | frases separadas por `\|`, sorteadas por vídeo |
+| `incluirLetra` | `true` inclui a transcrição na legenda (padrão: `false`) |
+
+Opcionalmente a letra da música pode entrar na legenda, extraída do SRT com um verso por linha. Está desligada por padrão porque legendas curtas costumam ler melhor; ative se fizer sentido para o seu conteúdo. No truncamento para o limite de 2200 caracteres do Instagram, quem cede espaço é a letra — as hashtags nunca são cortadas.
+
+> **Como escolher as hashtags e os ganchos:** use os Insights da sua própria conta, não regras gerais. Os posts que já performaram bem mostram que linguagem funciona com o seu público — esse dado vale mais que qualquer lista genérica de "melhores hashtags".
 
 `share_to_feed` está ativo por padrão: o Reel aparece também no feed e na grade do perfil, não só na aba Reels.
 
