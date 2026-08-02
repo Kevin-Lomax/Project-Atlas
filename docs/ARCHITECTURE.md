@@ -71,7 +71,8 @@ Google Drive /Entrada
 02 - Gerador de Legendas ─── baixa · ffmpeg extrai áudio · Groq transcreve
         │                    grava transcrição + SRT (TRANSCRIBED)
         ▼
-03 - Publicador ──────────── Instagram (Reels) + Facebook (Page)
+03 - Publicador ──────────── 12:00 e 18:00 · 1 vídeo por disparo
+        │                    Instagram (Reels) + Facebook (Page)
         │                    move → /Postados  ou  → /Erro
         ▼
 04 - Observabilidade ─────── dashboard · métricas · auto-recuperação · retenção
@@ -119,7 +120,7 @@ Um único network bridge (`app-network`) conecta os três serviços do Docker Co
 
 - `ingress/nginx/` — contém a configuração do Nginx, conectada ao serviço via bind mount somente leitura.
 - `ingress/certbot/www/` — webroot usado no desafio HTTP-01 do Let's Encrypt.
-- `workflows/` — reservado para definições de workflows do n8n (ainda não utilizado).
+- `workflows/` — os quatro workflows do n8n versionados em JSON, reimportáveis com `n8n import:workflow`.
 
 ## Restrições arquiteturais
 

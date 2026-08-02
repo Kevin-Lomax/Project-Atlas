@@ -22,10 +22,12 @@ O pipeline foi dividido em quatro workflows independentes, comunicando-se pelo b
 |---|---|---|
 | `01 - Detector de Vídeos` | Detecta vídeos novos, registra e move para Fila | Cron 1 min |
 | `02 - Gerador de Legendas` | Extrai áudio, transcreve e gera SRT | Chamado pelo 01 |
-| `03 - Publicador` | Publica no Instagram/Facebook, move para Postados ou Erro | Cron 2 min |
+| `03 - Publicador` | Publica no Instagram/Facebook, move para Postados ou Erro | Cron 12:00 e 18:00 |
 | `04 - Observabilidade` | Dashboard, métricas, auto-recuperação e retenção | Cron 15 min + Webhook |
 
 O acoplamento é feito por **estado no banco** (`videos.status`), não por chamadas encadeadas. Cada workflow pega o que está no estado que lhe compete. Isso significa que qualquer etapa pode falhar, ser reprocessada ou rodar em ritmo diferente sem quebrar as demais.
+
+Consequência prática importante: **produção e distribuição rodam em ritmos independentes**. A transcrição processa 1 vídeo a cada 2 minutos, enquanto a publicação sai 2× por dia. Isso permite transcrever um lote inteiro de uma vez e deixá-lo como estoque, drenado aos poucos pela publicação — sem nenhuma fila ou agendador adicional, apenas pelo estado no banco.
 
 O Workflow 01 chama o 02 diretamente (sem esperar retorno) apenas para reduzir latência; se essa chamada falhar, o vídeo continua em `PENDING` e seria reprocessado de qualquer forma.
 
