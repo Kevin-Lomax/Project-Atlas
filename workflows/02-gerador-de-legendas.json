@@ -110,7 +110,7 @@
         "notes": "Um video so sai de PENDING por aqui; sem isso ele ficaria orfao apos sair da pasta Entrada.",
         "parameters": {
           "operation": "executeQuery",
-          "query": "-- LIMIT 1: a VM tem menos de 1 GB de RAM e cada video passa por\n-- download + gravacao em disco + ffmpeg. Processar em paralelo derruba\n-- a instancia (verificado em execucao real com 3 videos simultaneos).\nSELECT id, drive_file_id, filename\nFROM videos\nWHERE status = 'PENDING'\n  AND current_folder = 'FILA'\nORDER BY created_at\nLIMIT 1;",
+          "query": "-- LIMIT 1: a VM tem menos de 1 GB de RAM e cada video passa por\n-- download + gravacao em disco + ffmpeg. Processar em paralelo derruba\n-- a instancia (verificado em execucao real com 3 videos simultaneos).\nSELECT id, drive_file_id, filename\nFROM videos\nWHERE status = 'PENDING'\n  AND current_folder = 'FILA'\n-- Desempate por id: videos de uma mesma varredura compartilham o mesmo\n-- created_at (now() e o horario de inicio da transacao), e sem o id a\n-- ordem entre eles ficaria indefinida.\nORDER BY created_at, id\nLIMIT 1;",
           "options": {}
         },
         "credentials": {
